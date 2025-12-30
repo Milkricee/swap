@@ -5,7 +5,7 @@ import type { SwapRoute, SwapProvider } from '@/types/wallet';
 
 // Zod Schemas
 const SwapRequestSchema = z.object({
-  fromCoin: z.enum(['BTC', 'ETH', 'SOL', 'USDC']),
+  fromCoin: z.enum(['BTC', 'ETH', 'LTC', 'SOL', 'USDC']),
   toCoin: z.literal('XMR'),
   amount: z.number().positive(),
 });
@@ -22,7 +22,7 @@ const PROVIDERS: Record<string, SwapProvider> = {
     name: 'ChangeNOW',
     fee: 0.0025, // 0.25%
     estimatedTime: '10-20 min',
-    pairs: ['ETH-XMR', 'USDC-XMR'],
+    pairs: ['ETH-XMR', 'LTC-XMR', 'USDC-XMR'],
   },
   jupiter: {
     name: 'Jupiter',
@@ -116,7 +116,7 @@ async function getChangeNOWRoute(
   fromCoin: string,
   amount: number
 ): Promise<SwapRoute | null> {
-  if (!['ETH', 'USDC'].includes(fromCoin)) return null;
+  if (!['ETH', 'LTC', 'USDC'].includes(fromCoin)) return null;
 
   try {
     // In production: Call ChangeNOW API
@@ -128,6 +128,7 @@ async function getChangeNOWRoute(
     // Mock XMR rates
     const rates: Record<string, number> = {
       ETH: 80, // 1 ETH = ~80 XMR
+      LTC: 0.4, // 1 LTC = ~0.4 XMR
       USDC: 0.5, // 1 USDC = ~0.5 XMR
     };
 
@@ -211,7 +212,7 @@ export async function executeSwap(
  * Get supported coins for swapping to XMR
  */
 export function getSupportedCoins(): string[] {
-  return ['BTC', 'ETH', 'SOL', 'USDC'];
+  return ['BTC', 'ETH', 'LTC', 'SOL', 'USDC'];
 }
 
 /**

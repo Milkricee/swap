@@ -3,7 +3,7 @@ import { getBestRoute } from '@/lib/swap-providers';
 import { z } from 'zod';
 
 const SwapRequestSchema = z.object({
-  fromCoin: z.enum(['BTC', 'ETH', 'SOL', 'USDC']),
+  fromCoin: z.enum(['BTC', 'ETH', 'LTC', 'SOL', 'USDC']),
   toCoin: z.literal('XMR'),
   amount: z.number().positive().max(1000000),
 });
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 // GET: Get supported coins
 export async function GET() {
   return NextResponse.json({
-    supportedCoins: ['BTC', 'ETH', 'SOL', 'USDC'],
+    supportedCoins: ['BTC', 'ETH', 'LTC', 'SOL', 'USDC'],
     targetCoin: 'XMR',
   });
 }

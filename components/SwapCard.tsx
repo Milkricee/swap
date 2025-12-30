@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import type { SwapRoute } from '@/types/wallet';
 import { ArrowDownUp, TrendingUp, Clock, Zap } from 'lucide-react';
 
-const SUPPORTED_COINS = ['BTC', 'ETH', 'SOL', 'USDC'];
+const SUPPORTED_COINS = ['BTC', 'ETH', 'LTC', 'SOL', 'USDC'];
 
 export default function SwapCard() {
   const [fromCoin, setFromCoin] = useState('BTC');
