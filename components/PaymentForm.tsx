@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import type { PaymentStatus } from '@/lib/payment';
-import { Send, QrCode, Loader2, CheckCircle2, XCircle, Wallet } from 'lucide-react';
+import { Send, QrCode, Loader2, CheckCircle2, XCircle, Wallet, X } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function PaymentForm() {
   const [shopAddress, setShopAddress] = useState('');
@@ -13,7 +14,9 @@ export default function PaymentForm() {
   const [label, setLabel] = useState('');
   const [status, setStatus] = useState<PaymentStatus | null>(null);
   const [estimate, setEstimate] = useState<any>(null);
-  const qrInputRef = useRef<HTMLInputElement>(null);
+  const [scannerActive, setScannerActive] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const qrReaderRef = useRef<HTMLDivElement>(null);
 
   async function handleGetEstimate() {
     if (!exactAmount || parseFloat(exactAmount) <= 0) {
@@ -99,10 +102,84 @@ export default function PaymentForm() {
     }
   }
 
-  function handleQRScan() {
-    // In production: Use camera API or QR scanner library
-    // For now: Trigger file input for QR image
-    qrInputRef.current?.click();
+  async function handleQRScan() {
+    if (scannerActive) {
+      await stopScanner();
+      return;
+    }
+
+    setScannerActive(true);
+
+    try {
+      const qrScanner = new Html5Qrcode('qr-reader');
+      scannerRef.current = qrScanner;
+
+      await qrScanner.start(
+        { facingMode: 'environment' }, // Use back camera on mobile
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        (decodedText) => {
+          // Successfully scanned QR code
+          parsePaymentURI(decodedText);
+          stopScanner();
+        },
+        (errorMessage) => {
+          // Scanning in progress (no code detected yet)
+          console.log('Scanning...', errorMessage);
+        }
+      );
+    } catch (err) {
+      console.error('QR Scanner error:', err);
+      alert('Camera access denied or not available');
+      setScannerActive(false);
+    }
+  }
+
+  async function stopScanner() {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch (err) {
+        console.error('Stop scanner error:', err);
+      }
+      scannerRef.current = null;
+    }
+    setScannerActive(false);
+  }
+
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(console.error);
+      }
+    };
+  }, []);
+
+  function parsePaymentURI(text: string) {
+    // Parse xmr://address?amount=X&label=Y
+    const uriMatch = text.match(/^(xmr|monero):\/?\/?([4|8][a-zA-Z0-9]{94,105})/);
+    if (uriMatch) {
+      setShopAddress(uriMatch[2]);
+      
+      const amountMatch = text.match(/[?&]amount=([0-9.]+)/);
+      if (amountMatch) {
+        setExactAmount(amountMatch[1]);
+      }
+      
+      const labelMatch = text.match(/[?&]label=([^&]+)/);
+      if (labelMatch) {
+        setLabel(decodeURIComponent(labelMatch[1]));
+      }
+    } else {
+      // Try direct address
+      if (text.match(/^[4|8][a-zA-Z0-9]{94,105}$/)) {
+        setShopAddress(text);
+      }
+    }
   }
 
   function handleQRFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -116,26 +193,39 @@ export default function PaymentForm() {
 
   function handlePasteURI() {
     navigator.clipboard.readText().then((text) => {
-      // Parse xmr://address?amount=X&label=Y
-      const uriMatch = text.match(/^(xmr|monero):\/?\/?([4|8][a-zA-Z0-9]{94,105})/);
-      if (uriMatch) {
-        setShopAddress(uriMatch[2]);
-        
-        const amountMatch = text.match(/[?&]amount=([0-9.]+)/);
-        if (amountMatch) {
-          setExactAmount(amountMatch[1]);
-        }
-        
-        const labelMatch = text.match(/[?&]label=([^&]+)/);
-        if (labelMatch) {
-          setLabel(decodeURIComponent(labelMatch[1]));
-        }
-      }
+      parsePaymentURI(text);
     });
   }
 
   return (
     <div className="space-y-4">
+      {/* QR Scanner Modal */}
+      {scannerActive && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white text-lg font-semibold">Scan Payment QR Code</h3>
+              <Button
+                onClick={() => stopScanner()}
+                variant="ghost"
+                size="sm"
+                className="text-white hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <div 
+              id="qr-reader" 
+              ref={qrReaderRef}
+              className="rounded-lg overflow-hidden"
+            />
+            <p className="text-white/70 text-sm text-center">
+              Position QR code within the frame
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Payment Form */}
       <Card className="backdrop-blur-md bg-white/5 border-white/10 p-6">
         <div className="space-y-5">
@@ -149,21 +239,14 @@ export default function PaymentForm() {
               onClick={handleQRScan}
               variant="outline"
               size="sm"
-              className="border-white/20 text-white/70 hover:bg-white/10"
+              className={`border-white/20 hover:bg-white/10 ${
+                scannerActive ? 'bg-[#00d4aa]/20 text-[#00d4aa] border-[#00d4aa]/50' : 'text-white/70'
+              }`}
             >
               <QrCode className="w-4 h-4 mr-2" />
-              Scan QR
+              {scannerActive ? 'Stop Scan' : 'Scan QR'}
             </Button>
           </div>
-
-          {/* Hidden QR Input */}
-          <input
-            ref={qrInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleQRFile}
-          />
 
           {/* Shop Address */}
           <div className="space-y-2">

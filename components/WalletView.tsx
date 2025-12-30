@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { XMRWallet } from '@/types/wallet';
@@ -93,11 +93,17 @@ export default function WalletView() {
     );
   }
 
-  // Calculate total balance across all 5 wallets (background)
-  const totalBalance = wallets.reduce((sum, w) => sum + parseFloat(w.balance), 0);
+  // Calculate total balance across all 5 wallets (memoized for performance)
+  const totalBalance = useMemo(() => 
+    wallets.reduce((sum, w) => sum + parseFloat(w.balance), 0),
+    [wallets]
+  );
   
   // Use Wallet #3 (Hot Wallet) as primary display address
-  const primaryWallet = wallets.find(w => w.id === 3) || wallets[0];
+  const primaryWallet = useMemo(() => 
+    wallets.find(w => w.id === 3) || wallets[0],
+    [wallets]
+  );
 
   return (
     <div className="space-y-4" id="wallets-section">

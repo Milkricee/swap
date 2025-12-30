@@ -1,8 +1,14 @@
+'use client';
+
+import { useState, lazy, Suspense } from 'react';
 import SwapCard from "@/components/SwapCard";
 import WalletView from "@/components/WalletView";
-import PaymentForm from "@/components/PaymentForm";
+import LoadingState from "@/components/LoadingState";
+
+const PaymentForm = lazy(() => import("@/components/PaymentForm"));
 
 export default function Home() {
+  const [toCoin, setToCoin] = useState('XMR');
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
       {/* Header */}
@@ -30,9 +36,9 @@ export default function Home() {
           <section id="swap-section">
             <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
               <span className="text-2xl">↔️</span>
-              Swap to XMR
+              Swap to {toCoin}
             </h2>
-            <SwapCard />
+            <SwapCard onToCoinChange={setToCoin} />
           </section>
 
           {/* Payment Section */}
@@ -41,7 +47,9 @@ export default function Home() {
               <span className="text-2xl">💸</span>
               Send Payment
             </h2>
-            <PaymentForm />
+            <Suspense fallback={<LoadingState />}>
+              <PaymentForm />
+            </Suspense>
           </section>
         </div>
 
