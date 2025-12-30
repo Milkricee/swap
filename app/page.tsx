@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, lazy, Suspense } from 'react';
+import { useState } from 'react';
 import SwapCard from "@/components/SwapCard";
 import WalletView from "@/components/WalletView";
-import LoadingState from "@/components/LoadingState";
-
-const PaymentForm = lazy(() => import("@/components/PaymentForm"));
 
 export default function Home() {
   const [toCoin, setToCoin] = useState('XMR');
@@ -29,29 +26,14 @@ export default function Home() {
           <WalletView />
         </section>
 
-        {/* Swap & Payment - Side by Side on Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Swap Section */}
-          <section id="swap-section">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <span className="text-2xl">↔️</span>
-              Swap to {toCoin}
-            </h2>
-            <SwapCard onToCoinChange={setToCoin} />
-          </section>
-
-          {/* Payment Section */}
-          <section id="payment-section">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <span className="text-2xl">💸</span>
-              Send Payment
-            </h2>
-            <Suspense fallback={<LoadingState />}>
-              <PaymentForm />
-            </Suspense>
-          </section>
-        </div>
+        {/* Swap / Receive / Send Section - Full Width */}
+        <section id="swap-section">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="text-2xl">↔️</span>
+            Swap to {toCoin}
+          </h2>
+          <SwapCard onToCoinChange={setToCoin} />
+        </section>
 
         {/* Footer Info */}
         <footer className="text-center pt-8 pb-4 text-white/30 text-sm">
