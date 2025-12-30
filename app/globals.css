@@ -1,23 +1,28 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
-  * {
-    @apply border-border;
+  *,
+  ::before,
+  ::after {
+    border-color: hsl(240 3.7% 15.9%);
   }
+  
   body {
-    @apply bg-background text-foreground;
+    background-color: #0a0a0a;
+    color: hsl(0 0% 98%);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
 @layer utilities {
   .glass {
-    @apply backdrop-blur-md bg-white/5 border border-white/10;
+    backdrop-filter: blur(12px);
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
   
   .touch-target {
-    @apply min-h-[48px] min-w-[48px];
+    min-height: 48px;
+    min-width: 48px;
   }
 }
