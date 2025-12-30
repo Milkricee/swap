@@ -1,18 +1,40 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
+import Script from "next/script";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+  preload: true,
 });
 
 export const metadata: Metadata = {
   title: "Private XMR Swap",
-  description: "Privacy-first Monero swap & payment app",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
-  themeColor: "#0a0a0a",
+  description: "Privacy-first Monero swap & payment app. Swap BTC/ETH/SOL/USDC to XMR with 5-wallet distribution.",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "XMR Swap",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-512.png",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#0a0a0a",
 };
 
 export default function RootLayout({
@@ -22,8 +44,32 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
       <body className={`${inter.variable} antialiased`}>
-        {children}
+        <ErrorBoundary>
+          <KeyboardShortcuts />
+          {children}
+        </ErrorBoundary>
+
+        {/* Service Worker Registration */}
+        <Script
+          id="sw-register"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW registration failed'));
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );

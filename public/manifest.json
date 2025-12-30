@@ -6,16 +6,46 @@
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#00d4aa",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["finance", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Swap",
+      "short_name": "Swap",
+      "description": "Quick swap to XMR",
+      "url": "/?action=swap",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pay",
+      "short_name": "Pay",
+      "description": "Send payment",
+      "url": "/?action=pay",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
