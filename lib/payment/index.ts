@@ -55,9 +55,9 @@ export async function executePayment(
       const deficit = validated.exactAmount - hotWalletBalance;
       
       // Consolidate from other wallets
-      const consolidationResult = await consolidateToHotWallet(validated.exactAmount);
+      const consolidationSuccess = await consolidateToHotWallet(validated.exactAmount);
       
-      if (!consolidationResult.success) {
+      if (!consolidationSuccess) {
         return {
           stage: 'error',
           message: 'Consolidation failed',

@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createWallets } from '@/lib/wallets';
-import { z } from 'zod';
-
-const CreateWalletsSchema = z.object({
-  password: z.string().min(8),
-});
 
 // Rate limiting (simple in-memory)
 const rateLimitMap = new Map<string, number[]>();
@@ -28,25 +23,14 @@ export async function POST(request: NextRequest) {
     
     rateLimitMap.set(ip, [...recentRequests, now]);
 
-    // Validate request
-    const body = await request.json();
-    const { password } = CreateWalletsSchema.parse(body);
-
-    // Create wallets
-    const wallets = await createWallets(password);
+    // Create wallets (no password needed - encryption key from .env)
+    const wallets = await createWallets();
 
     return NextResponse.json({ wallets }, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid request', details: error.errors },
-        { status: 400 }
-      );
-    }
-
     console.error('Create wallets error:', error);
     return NextResponse.json(
-      { error: 'Failed to create wallets' },
+      { error: 'Failed to create wallets', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

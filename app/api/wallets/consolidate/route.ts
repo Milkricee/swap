@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { consolidateToHotWallet, getWallets } from '@/lib/wallets';
+import { z } from 'zod';
+
+const ConsolidateSchema = z.object({
+  targetAmount: z.number().positive(),
+});
 
 // Rate limiting
 const rateLimitMap = new Map<string, number[]>();
@@ -23,16 +28,20 @@ export async function POST(request: NextRequest) {
     
     rateLimitMap.set(ip, [...recentRequests, now]);
 
+    // Validate request
+    const body = await request.json();
+    const { targetAmount } = ConsolidateSchema.parse(body);
+
     // Consolidate wallets
-    const result = await consolidateToHotWallet();
+    const result = await consolidateToHotWallet(targetAmount);
     
     // Get updated wallets
     const wallets = await getWallets();
 
     return NextResponse.json(
       {
-        success: result.success,
-        consolidatedAmount: result.consolidatedAmount,
+        success: result,
+        targetAmount,
         wallets,
       },
       { status: 200 }
@@ -40,7 +49,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Consolidate error:', error);
     return NextResponse.json(
-      { error: 'Failed to consolidate wallets' },
+      { error: 'Failed to consolidate wallets', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

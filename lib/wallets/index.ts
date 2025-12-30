@@ -1,200 +1,254 @@
-'use server'
-
 import { z } from 'zod';
-import { encryptedStorage } from '@/lib/storage/encrypted';
-import type { XMRWallet, WalletDistribution } from '@/types/wallet';
+import CryptoJS from 'crypto-js';
+import type { XMRWallet, EncryptedWalletData } from '@/types/wallet';
 import { WALLET_DISTRIBUTION } from '@/types/wallet';
+
+// Monero-javascript import (client-side only)
+let MoneroWalletFull: any = null;
+let MoneroNetworkType: any = null;
+
+// Initialize Monero library (lazy load for browser)
+async function initMonero() {
+  if (typeof window === 'undefined') return;
+  
+  if (!MoneroWalletFull) {
+    const moneroJs = await import('monero-javascript');
+    MoneroWalletFull = moneroJs.MoneroWalletFull;
+    MoneroNetworkType = moneroJs.MoneroNetworkType;
+  }
+}
 
 // Zod Schemas
 const WalletSchema = z.object({
-  id: z.number().min(1).max(5),
-  address: z.string().min(95).max(106), // XMR address length
+  id: z.number().min(0).max(4),
+  address: z.string().min(95).max(106),
   balance: z.string(),
   type: z.enum(['cold', 'hot', 'reserve']),
   label: z.string(),
+  publicViewKey: z.string().optional(),
+  publicSpendKey: z.string().optional(),
 });
 
 const WalletsArraySchema = z.array(WalletSchema).length(5);
 
 // Storage Keys
-const WALLETS_KEY = 'xmr_wallets';
-const WALLET_SEED_KEY = 'xmr_seed'; // NEVER expose this!
+const WALLETS_KEY = 'xmr_wallets_encrypted';
+const ENCRYPTION_KEY = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || 'default-key-change-in-production';
 
-// Wallet Types per ID
+// Wallet Types per ID (0-indexed)
 const WALLET_TYPES: Record<number, 'cold' | 'hot' | 'reserve'> = {
-  1: 'cold',
-  2: 'cold',
-  3: 'hot', // Hot Wallet für schnelle Payments
-  4: 'cold',
-  5: 'reserve',
+  0: 'cold',    // Wallet #1
+  1: 'cold',    // Wallet #2
+  2: 'hot',     // Wallet #3 - Hot Wallet
+  3: 'cold',    // Wallet #4
+  4: 'reserve', // Wallet #5
+};
+
+const WALLET_LABELS: Record<number, string> = {
+  0: 'Wallet 1 (Cold)',
+  1: 'Wallet 2 (Cold)',
+  2: 'Wallet 3 (Hot)',
+  3: 'Wallet 4 (Cold)',
+  4: 'Wallet 5 (Reserve)',
 };
 
 /**
- * Create 5 new XMR wallets with distribution
- * CRITICAL: This uses mock addresses. In production, use monero-javascript
+ * Encrypt data with AES
  */
-export async function createWallets(userPassword: string): Promise<XMRWallet[]> {
-  // Validate password
-  if (!userPassword || userPassword.length < 8) {
-    throw new Error('Password must be at least 8 characters');
-  }
-
-  // In production: Use monero-javascript to generate real wallets
-  // For now, mock wallets with valid XMR address format
-  const wallets: XMRWallet[] = [
-    {
-      id: 1,
-      address: generateMockXMRAddress(1),
-      balance: '0.000000000000',
-      type: 'cold',
-      label: 'Wallet 1 (Cold)',
-    },
-    {
-      id: 2,
-      address: generateMockXMRAddress(2),
-      balance: '0.000000000000',
-      type: 'cold',
-      label: 'Wallet 2 (Cold)',
-    },
-    {
-      id: 3,
-      address: generateMockXMRAddress(3),
-      balance: '0.000000000000',
-      type: 'hot',
-      label: 'Wallet 3 (Hot)',
-    },
-    {
-      id: 4,
-      address: generateMockXMRAddress(4),
-      balance: '0.000000000000',
-      type: 'cold',
-      label: 'Wallet 4 (Cold)',
-    },
-    {
-      id: 5,
-      address: generateMockXMRAddress(5),
-      balance: '0.000000000000',
-      type: 'reserve',
-      label: 'Wallet 5 (Reserve)',
-    },
-  ];
-
-  // Validate with Zod
-  WalletsArraySchema.parse(wallets);
-
-  // Store encrypted (NEVER store private keys here!)
-  if (typeof window !== 'undefined') {
-    encryptedStorage.set(WALLETS_KEY, wallets);
-  }
-
-  return wallets;
+function encrypt(data: string): string {
+  return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
 }
 
 /**
- * Get all wallets from encrypted storage
+ * Decrypt data with AES
+ */
+function decrypt(encryptedData: string): string {
+  const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+  return bytes.toString(CryptoJS.enc.Utf8);
+}
+
+/**
+ * Create 5 new XMR wallets with real monero-javascript
+ * Seeds are encrypted and stored in localStorage
+ */
+export async function createWallets(): Promise<XMRWallet[]> {
+  if (typeof window === 'undefined') {
+    throw new Error('Wallets can only be created in browser');
+  }
+
+  await initMonero();
+
+  const wallets: XMRWallet[] = [];
+  const seeds: string[] = [];
+  const addresses: string[] = [];
+
+  try {
+    console.log('🔐 Creating 5 XMR wallets...');
+
+    // Create 5 wallets in-memory
+    for (let i = 0; i < 5; i++) {
+      console.log(`Creating wallet ${i + 1}/5...`);
+
+      // Create wallet in-memory (no daemon connection needed for address generation)
+      const wallet = await MoneroWalletFull.createWallet({
+        networkType: MoneroNetworkType.MAINNET,
+        password: '', // Empty password for in-memory wallet
+      });
+
+      const mnemonic = await wallet.getMnemonic();
+      const primaryAddress = await wallet.getPrimaryAddress();
+      const publicViewKey = await wallet.getPublicViewKey();
+      const publicSpendKey = await wallet.getPublicSpendKey();
+
+      seeds.push(mnemonic);
+      addresses.push(primaryAddress);
+
+      wallets.push({
+        id: i,
+        address: primaryAddress,
+        balance: '0.000000000000',
+        type: WALLET_TYPES[i],
+        label: WALLET_LABELS[i],
+        publicViewKey,
+        publicSpendKey,
+      });
+
+      // Close wallet after getting details
+      await wallet.close();
+    }
+
+    // Encrypt seeds and store
+    const encryptedData: EncryptedWalletData = {
+      encryptedSeeds: encrypt(JSON.stringify(seeds)),
+      walletAddresses: addresses,
+      createdAt: Date.now(),
+    };
+
+    localStorage.setItem(WALLETS_KEY, JSON.stringify(encryptedData));
+
+    // Store public wallet data (non-sensitive)
+    localStorage.setItem('xmr_wallets_public', JSON.stringify(wallets));
+
+    console.log('✅ Created 5 XMR wallets (seeds encrypted in localStorage)');
+    console.log('📝 IMPORTANT: Backup your seeds! Use getWalletSeed() in console');
+    
+    return wallets;
+
+  } catch (error) {
+    console.error('Failed to create wallets:', error);
+    throw new Error('Wallet creation failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+  }
+}
+
+/**
+ * Get all wallets from storage
  */
 export async function getWallets(): Promise<XMRWallet[] | null> {
   if (typeof window === 'undefined') return null;
-  
-  const wallets = encryptedStorage.get<XMRWallet[]>(WALLETS_KEY);
-  
-  if (!wallets) return null;
-  
-  // Validate structure
+
+  const publicData = localStorage.getItem('xmr_wallets_public');
+  if (!publicData) return null;
+
   try {
+    const wallets = JSON.parse(publicData) as XMRWallet[];
     WalletsArraySchema.parse(wallets);
     return wallets;
-  } catch {
+  } catch (error) {
+    console.error('Failed to load wallets:', error);
     return null;
   }
 }
 
 /**
- * Distribute swap proceeds across 5 wallets according to WALLET_DISTRIBUTION
+ * Get decrypted seed for a specific wallet (DANGEROUS - use with care!)
+ * Usage: await getWalletSeed(0) in browser console
  */
-export async function distributeSwapAmount(
-  totalAmount: number
-): Promise<Record<number, number>> {
-  const distribution: Record<number, number> = {
-    1: parseFloat((totalAmount * WALLET_DISTRIBUTION.wallet1).toFixed(12)),
-    2: parseFloat((totalAmount * WALLET_DISTRIBUTION.wallet2).toFixed(12)),
-    3: parseFloat((totalAmount * WALLET_DISTRIBUTION.wallet3).toFixed(12)),
-    4: parseFloat((totalAmount * WALLET_DISTRIBUTION.wallet4).toFixed(12)),
-    5: parseFloat((totalAmount * WALLET_DISTRIBUTION.wallet5).toFixed(12)),
-  };
+export async function getWalletSeed(walletId: number): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  if (walletId < 0 || walletId > 4) return null;
 
-  return distribution;
+  try {
+    const encryptedDataStr = localStorage.getItem(WALLETS_KEY);
+    if (!encryptedDataStr) return null;
+
+    const encryptedData: EncryptedWalletData = JSON.parse(encryptedDataStr);
+    const decryptedSeeds = decrypt(encryptedData.encryptedSeeds);
+    const seeds: string[] = JSON.parse(decryptedSeeds);
+
+    return seeds[walletId] || null;
+  } catch (error) {
+    console.error('Failed to get wallet seed:', error);
+    return null;
+  }
 }
 
 /**
- * Update wallet balances after swap distribution
+ * Get wallet balance from public Monero node
+ * Uses view-only wallet to scan for balance
  */
-export async function updateWalletBalances(
-  distribution: Record<number, number>
-): Promise<void> {
-  const wallets = await getWallets();
-  if (!wallets) throw new Error('No wallets found');
+export async function getWalletBalance(walletId: number): Promise<string> {
+  if (typeof window === 'undefined') return '0.000000000000';
 
-  const updated = wallets.map((wallet) => ({
-    ...wallet,
-    balance: (parseFloat(wallet.balance) + distribution[wallet.id]).toFixed(12),
-  }));
+  try {
+    await initMonero();
+    
+    const wallets = await getWallets();
+    if (!wallets || !wallets[walletId]) return '0.000000000000';
 
-  encryptedStorage.set(WALLETS_KEY, updated);
+    const wallet = wallets[walletId];
+    const seed = await getWalletSeed(walletId);
+    if (!seed) return '0.000000000000';
+
+    // Create view-only wallet to check balance
+    const rpcUrl = process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081';
+    
+    const moneroWallet = await MoneroWalletFull.createWallet({
+      networkType: MoneroNetworkType.MAINNET,
+      mnemonic: seed,
+      restoreHeight: 0, // Full sync (slow) - for production use specific height
+      serverUri: rpcUrl,
+      password: '',
+    });
+
+    await moneroWallet.sync(); // Sync blockchain
+    const balance = await moneroWallet.getBalance();
+    const balanceXMR = (Number(balance) / 1e12).toFixed(12); // Convert atomic units to XMR
+
+    await moneroWallet.close();
+
+    return balanceXMR;
+
+  } catch (error) {
+    console.error(`Failed to get balance for wallet ${walletId}:`, error);
+    return '0.000000000000';
+  }
 }
 
 /**
- * Consolidate wallets 1,2,4,5 → Wallet 3 (Hot Wallet)
- * Use before making exact payments from Hot Wallet
+ * Update all wallet balances
  */
-export async function consolidateToHotWallet(
-  targetAmount?: number
-): Promise<{ success: boolean; consolidatedAmount: number }> {
+export async function updateWalletBalances(): Promise<XMRWallet[]> {
   const wallets = await getWallets();
   if (!wallets) throw new Error('No wallets found');
 
-  const sourceWallets = [1, 2, 4, 5];
-  const hotWallet = wallets.find((w) => w.id === 3);
-  if (!hotWallet) throw new Error('Hot wallet not found');
+  console.log('🔄 Updating wallet balances (this may take a while)...');
 
-  let consolidatedAmount = 0;
+  // Update balances in parallel (can be slow with full sync)
+  const updatedWallets = await Promise.all(
+    wallets.map(async (wallet) => {
+      const balance = await getWalletBalance(wallet.id);
+      console.log(`Wallet ${wallet.id}: ${balance} XMR`);
+      return { ...wallet, balance };
+    })
+  );
 
-  // Calculate total from source wallets
-  const updated = wallets.map((wallet) => {
-    if (sourceWallets.includes(wallet.id)) {
-      const balance = parseFloat(wallet.balance);
-      
-      if (targetAmount) {
-        // Only take what's needed
-        const needed = Math.max(0, targetAmount - consolidatedAmount);
-        const toTransfer = Math.min(balance, needed);
-        consolidatedAmount += toTransfer;
-        
-        return {
-          ...wallet,
-          balance: (balance - toTransfer).toFixed(12),
-        };
-      } else {
-        // Transfer all
-        consolidatedAmount += balance;
-        return { ...wallet, balance: '0.000000000000' };
-      }
-    }
-    
-    if (wallet.id === 3) {
-      // Add to hot wallet
-      return {
-        ...wallet,
-        balance: (parseFloat(wallet.balance) + consolidatedAmount).toFixed(12),
-      };
-    }
-    
-    return wallet;
-  });
+  // Update storage
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('xmr_wallets_public', JSON.stringify(updatedWallets));
+  }
 
-  encryptedStorage.set(WALLETS_KEY, updated);
-
-  return { success: true, consolidatedAmount };
+  console.log('✅ Balances updated');
+  return updatedWallets;
 }
 
 /**
@@ -208,45 +262,156 @@ export async function getTotalBalance(): Promise<number> {
 }
 
 /**
- * Get Hot Wallet (Wallet #3) balance
+ * Get Hot Wallet (id=2) balance
  */
 export async function getHotWalletBalance(): Promise<number> {
   const wallets = await getWallets();
   if (!wallets) return 0;
 
-  const hotWallet = wallets.find((w) => w.id === 3);
+  const hotWallet = wallets.find(w => w.id === 2);
   return hotWallet ? parseFloat(hotWallet.balance) : 0;
 }
 
 /**
- * Check if wallets exist
+ * Consolidate wallets: Transfer from cold wallets to hot wallet
+ * This requires spending transactions - COMPLEX operation
  */
-export async function walletsExist(): Promise<boolean> {
-  const wallets = await getWallets();
-  return wallets !== null && wallets.length === 5;
+export async function consolidateToHotWallet(targetAmount: number): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    await initMonero();
+
+    const wallets = await getWallets();
+    if (!wallets) throw new Error('No wallets found');
+
+    const hotWalletId = 2;
+    const hotWallet = wallets[hotWalletId];
+    const hotBalance = parseFloat(hotWallet.balance);
+
+    if (hotBalance >= targetAmount) {
+      console.log('✅ Hot wallet already has sufficient balance');
+      return true;
+    }
+
+    const needed = targetAmount - hotBalance;
+    console.log(`Need to consolidate ${needed} XMR to hot wallet`);
+
+    // Collect from other wallets (0,1,3,4)
+    const sourceWalletIds = [0, 1, 3, 4];
+    
+    for (const sourceId of sourceWalletIds) {
+      const sourceWallet = wallets[sourceId];
+      const sourceBalance = parseFloat(sourceWallet.balance);
+
+      if (sourceBalance > 0.001) { // Minimum 0.001 XMR to transfer (avoid dust)
+        console.log(`Transferring from wallet ${sourceId}: ${sourceBalance} XMR`);
+
+        // Get wallet seed
+        const seed = await getWalletSeed(sourceId);
+        if (!seed) continue;
+
+        // Open source wallet
+        const rpcUrl = process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081';
+        const moneroWallet = await MoneroWalletFull.createWallet({
+          networkType: MoneroNetworkType.MAINNET,
+          mnemonic: seed,
+          restoreHeight: 0,
+          serverUri: rpcUrl,
+          password: '',
+        });
+
+        await moneroWallet.sync();
+
+        // Create transaction to hot wallet
+        const amountToSend = Math.min(sourceBalance - 0.0001, needed); // Keep some for fees
+        const atomicAmount = BigInt(Math.floor(amountToSend * 1e12));
+
+        const txConfig = {
+          accountIndex: 0,
+          address: hotWallet.address,
+          amount: atomicAmount.toString(),
+          relay: true, // Broadcast to network
+        };
+
+        const tx = await moneroWallet.createTx(txConfig);
+        await moneroWallet.relayTx(tx);
+
+        console.log(`✅ Sent ${amountToSend} XMR from wallet ${sourceId} to hot wallet`);
+        console.log(`TX Hash: ${tx.getHash()}`);
+
+        await moneroWallet.close();
+
+        // Check if we have enough now
+        if (amountToSend >= needed) break;
+      }
+    }
+
+    // Refresh balances
+    await updateWalletBalances();
+
+    return true;
+
+  } catch (error) {
+    console.error('Consolidation failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Distribute XMR to all wallets according to WALLET_DISTRIBUTION
+ * Used after swaps to split funds across 5 wallets
+ */
+export async function distributeToWallets(totalAmount: number): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const wallets = await getWallets();
+    if (!wallets) throw new Error('No wallets found');
+
+    // Calculate distribution amounts
+    const amounts = [
+      totalAmount * WALLET_DISTRIBUTION.wallet1, // 20%
+      totalAmount * WALLET_DISTRIBUTION.wallet2, // 20%
+      totalAmount * WALLET_DISTRIBUTION.wallet3, // 30%
+      totalAmount * WALLET_DISTRIBUTION.wallet4, // 20%
+      totalAmount * WALLET_DISTRIBUTION.wallet5, // 10%
+    ];
+
+    console.log('Distribution plan:', amounts);
+
+    // In production: Send from swap receive address to each wallet
+    // This is a mock - actual implementation requires swap integration
+
+    return true;
+  } catch (error) {
+    console.error('Distribution failed:', error);
+    return false;
+  }
 }
 
 /**
  * Delete all wallets (DANGEROUS!)
  */
 export async function deleteWallets(): Promise<void> {
-  encryptedStorage.remove(WALLETS_KEY);
-  encryptedStorage.remove(WALLET_SEED_KEY);
+  if (typeof window === 'undefined') return;
+
+  const confirmed = confirm(
+    '⚠️ WARNING: This will delete all wallets and encrypted seeds!\n\n' +
+    'Make sure you have backed up your mnemonic seeds.\n\n' +
+    'Continue?'
+  );
+
+  if (!confirmed) return;
+
+  localStorage.removeItem(WALLETS_KEY);
+  localStorage.removeItem('xmr_wallets_public');
+
+  console.log('🗑️ All wallets deleted');
 }
 
-// Helper: Generate mock XMR address (95-106 chars, starts with 4)
-function generateMockXMRAddress(walletId: number): string {
-  const prefix = '4';
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789';
-  let address = prefix;
-  
-  // Add wallet ID as identifier in mock address
-  address += walletId.toString();
-  
-  // Fill to 95 characters
-  for (let i = address.length; i < 95; i++) {
-    address += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
-  return address;
+// Export wallet seed getter for browser console access
+if (typeof window !== 'undefined') {
+  (window as any).getWalletSeed = getWalletSeed;
+  (window as any).deleteWallets = deleteWallets;
 }

@@ -35,13 +35,19 @@ export default function WalletView() {
       const response = await fetch('/api/wallets/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'user-password-123' }), // In production: proper auth
+        body: JSON.stringify({}), // No password needed
       });
       
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to create wallets');
+      }
+      
       setWallets(data.wallets);
     } catch (error) {
       console.error('Failed to create wallets:', error);
+      alert('Wallet creation failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }

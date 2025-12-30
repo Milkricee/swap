@@ -5,12 +5,20 @@ export interface XMRWallet {
   balance: string;
   type: 'cold' | 'hot' | 'reserve';
   label: string;
+  publicViewKey?: string;
+  publicSpendKey?: string;
+}
+
+export interface EncryptedWalletData {
+  encryptedSeeds: string; // AES encrypted array of mnemonic seeds
+  walletAddresses: string[]; // Public addresses (safe to store)
+  createdAt: number;
 }
 
 export interface WalletDistribution {
   wallet1: number; // 20%
   wallet2: number; // 20%
-  wallet3: number; // 30% - Hot Wallet
+  wallet3: number; // 30% - Hot Wallet (id=2, 0-indexed)
   wallet4: number; // 20%
   wallet5: number; // 10% - Reserve
 }
