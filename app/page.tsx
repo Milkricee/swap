@@ -1,124 +1,60 @@
-import { ArrowLeftRight, Wallet, Send } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import SwapCard from "@/components/SwapCard";
+import WalletView from "@/components/WalletView";
+import PaymentForm from "@/components/PaymentForm";
 
 export default function Home() {
   return (
-    <main className="min-h-screen p-4 md:p-8">
+    <main className="min-h-screen bg-background p-4 md:p-8">
       {/* Header */}
-      <header className="mb-8">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
+      <header className="mb-8 max-w-6xl mx-auto">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-primary">XMR Swap</h1>
-            <p className="text-sm text-muted-foreground">Privacy-first exchange</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Total Balance</p>
-            <p className="text-xl md:text-2xl font-bold">0.00 XMR</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-[#00d4aa]">XMR Swap</h1>
+            <p className="text-sm text-white/50">Privacy-first Monero exchange</p>
           </div>
         </div>
       </header>
 
-      {/* Dashboard Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 max-w-6xl mx-auto">
+      {/* Main Dashboard - 2 Column Layout */}
+      <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* Swap Card */}
-        <Card className="glass hover:bg-white/10 transition-all">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <ArrowLeftRight className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Swap</CardTitle>
-                <CardDescription>BTC/ETH/SOL → XMR</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Best Rate</p>
-              <p className="text-2xl font-bold text-primary">0.15%</p>
-              <p className="text-xs text-muted-foreground">via btcswapxmr</p>
-            </div>
-            <Button className="w-full touch-target" size="lg">
-              Find Best Route
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Wallet Section - Full Width */}
+        <section>
+          <WalletView />
+        </section>
 
-        {/* Wallets Card */}
-        <Card className="glass hover:bg-white/10 transition-all">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Wallet className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Wallets</CardTitle>
-                <CardDescription>5-Wallet Distribution</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {[1, 2, 3, 4, 5].map((num) => (
-                <div 
-                  key={num} 
-                  className="p-3 rounded-md bg-white/5 border border-white/10"
-                >
-                  <p className="text-xs text-muted-foreground">Wallet {num}</p>
-                  <p className="font-mono font-bold">0.00 XMR</p>
-                  {num === 3 && (
-                    <span className="text-xs text-primary">Hot</span>
-                  )}
-                </div>
-              ))}
-            </div>
-            <Button variant="outline" className="w-full touch-target" size="lg">
-              Create Wallets
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Swap & Payment - Side by Side on Desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Swap Section */}
+          <section id="swap-section">
+            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="text-2xl">↔️</span>
+              Swap to XMR
+            </h2>
+            <SwapCard />
+          </section>
 
-        {/* Payment Card */}
-        <Card className="glass hover:bg-white/10 transition-all md:col-span-2 lg:col-span-1">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Send className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Payment</CardTitle>
-                <CardDescription>Exact amount transfer</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Quick Actions</p>
-              <div className="space-y-2">
-                <Button variant="ghost" className="w-full justify-start touch-target">
-                  <span className="mr-2">💸</span> Send Payment
-                </Button>
-                <Button variant="ghost" className="w-full justify-start touch-target">
-                  <span className="mr-2">📷</span> Scan QR Code
-                </Button>
-                <Button variant="ghost" className="w-full justify-start touch-target">
-                  <span className="mr-2">🔄</span> Consolidate Wallets
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Payment Section */}
+          <section id="payment-section">
+            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="text-2xl">💸</span>
+              Send Payment
+            </h2>
+            <PaymentForm />
+          </section>
+        </div>
+
+        {/* Footer Info */}
+        <footer className="text-center pt-8 pb-4 text-white/30 text-sm">
+          <p>🔒 Privacy-first • 5-Wallet Distribution • Encrypted Storage</p>
+          <div className="mt-2 flex items-center justify-center gap-4 text-xs">
+            <kbd className="px-2 py-1 rounded bg-white/5">⌘+S</kbd> Swap
+            <kbd className="px-2 py-1 rounded bg-white/5">⌘+P</kbd> Pay
+            <kbd className="px-2 py-1 rounded bg-white/5">⌘+W</kbd> Wallet
+          </div>
+        </footer>
       </div>
-
-      {/* Footer */}
-      <footer className="mt-12 text-center">
-        <p className="text-xs text-muted-foreground">
-          100% Private • No KYC • Localhost Only
-        </p>
-      </footer>
     </main>
   );
 }
