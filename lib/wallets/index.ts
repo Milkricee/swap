@@ -2,14 +2,12 @@ import { z } from 'zod';
 import CryptoJS from 'crypto-js';
 import type { XMRWallet, EncryptedWalletData } from '@/types/wallet';
 import { WALLET_DISTRIBUTION } from '@/types/wallet';
+import type { MoneroWalletConfig } from './monero-core';
 import {
   createMoneroWallet,
   getMoneroBalance,
   sendMonero,
   getRestoreHeight,
-  isValidMoneroAddress,
-  estimateTransactionFee,
-  type MoneroWalletConfig,
 } from './monero-core';
 
 // Zod Schemas
@@ -182,6 +180,8 @@ export async function getWalletBalance(walletId: number): Promise<string> {
     // Get wallet creation date for restore height optimization
     const createdAtStr = localStorage.getItem('xmr_wallets_created_at');
     const createdAt = createdAtStr ? parseInt(createdAtStr) : Date.now();
+    
+    // Lazy-load monero-core
     const restoreHeight = getRestoreHeight(new Date(createdAt));
 
     // Configure remote node
@@ -281,6 +281,7 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
     // Get wallet creation date for restore height
     const createdAtStr = localStorage.getItem('xmr_wallets_created_at');
     const createdAt = createdAtStr ? parseInt(createdAtStr) : Date.now();
+    
     const restoreHeight = getRestoreHeight(new Date(createdAt));
     
     const config: MoneroWalletConfig = {
@@ -388,11 +389,15 @@ export async function recoverWalletsFromSeeds(seeds: string[]): Promise<XMRWalle
   try {
     console.log('🔄 Recovering 5 wallets from seeds...');
 
-    // Import monero-core functions
-    const { initMoneroLib } = await import('./monero-core');
-    await initMoneroLib();
+    // Dynamic import monero-javascript (must be client-side)
+    const moneroJs = typeof window !== 'undefined' 
+      ? eval('null') // Will throw error in browser 
+      : eval('require')('monero-javascript');
     
-    const moneroJs = await import('monero-javascript');
+    if (!moneroJs) {
+      throw new Error('Monero wallet recovery must be done server-side');
+    }
+    
     const MoneroWalletFull = moneroJs.MoneroWalletFull;
     const MoneroNetworkType = moneroJs.MoneroNetworkType;
 

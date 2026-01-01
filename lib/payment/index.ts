@@ -5,14 +5,7 @@ import {
   getHotWalletBalance,
   getWalletSeed,
 } from '@/lib/wallets/index';
-import {
-  sendMonero,
-  getMoneroBalance,
-  estimateTransactionFee,
-  isValidMoneroAddress,
-  getRestoreHeight,
-  type MoneroWalletConfig,
-} from '@/lib/wallets/monero-core';
+import { sendMonero, getRestoreHeight } from '@/lib/wallets/monero-core';
 import type { XMRWallet } from '@/types/wallet';
 
 // Zod Schemas
@@ -117,8 +110,8 @@ async function sendExactPayment(
   label?: string
 ): Promise<string> {
   try {
-    // Validate address
-    if (!isValidMoneroAddress(shopAddress)) {
+    // Validate XMR address format (95-106 chars, starts with 4)
+    if (!/^4[0-9A-Za-z]{94,105}$/.test(shopAddress)) {
       throw new Error('Invalid Monero address');
     }
 
@@ -136,7 +129,7 @@ async function sendExactPayment(
     const restoreHeight = getRestoreHeight(new Date(createdAt));
 
     // Configure remote node
-    const config: MoneroWalletConfig = {
+    const config = {
       rpcUrl: process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081',
       networkType: (process.env.NEXT_PUBLIC_MONERO_NETWORK as any) || 'mainnet',
       restoreHeight,
@@ -164,17 +157,19 @@ async function sendExactPayment(
 }
 
 /**
- * Validate XMR address format
+ * Validate XMR address (simple regex check)
  */
-export function validateXMRAddress(address: string): boolean {
-  return isValidMoneroAddress(address);
+export async function validateXMRAddress(address: string): Promise<boolean> {
+  // XMR mainnet addresses: start with 4, 95-106 chars
+  return /^4[0-9A-Za-z]{94,105}$/.test(address);
 }
 
 /**
- * Estimate payment fee
+ * Estimate payment fee (fixed estimate for now)
  */
-export function estimatePaymentFee(): number {
-  return estimateTransactionFee();
+export async function estimatePaymentFee(): Promise<number> {
+  // Monero fees typically ~0.0001-0.001 XMR
+  return 0.0005;
 }
 
 /**

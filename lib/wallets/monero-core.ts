@@ -1,22 +1,13 @@
 /**
- * Monero Wallet Core - Production-Ready Implementation
+ * Monero Wallet Core - SERVER-ONLY Implementation
  * 
- * Features:
- * - Real wallet creation with monero-javascript
- * - Remote node balance queries
- * - Transaction broadcasting
- * - Encrypted seed storage
- * - 25-word mnemonic backup
+ * CRITICAL: This file runs ONLY in Node.js (API routes)
+ * monero-javascript CANNOT be bundled for the browser
  */
 
-import type { 
-  MoneroWalletFull as MoneroWalletFullType,
-  MoneroNetworkType as MoneroNetworkTypeType
-} from 'monero-javascript';
-
-// Lazy load monero-javascript (browser-only)
-let MoneroWalletFull: typeof MoneroWalletFullType | null = null;
-let MoneroNetworkType: typeof MoneroNetworkTypeType | null = null;
+// Import monero-javascript only when module loads (server-side)
+const monerojs = eval('require')('monero-javascript');
+const { MoneroWalletFull, MoneroNetworkType } = monerojs;
 
 export interface MoneroWalletConfig {
   rpcUrl: string;
@@ -32,31 +23,10 @@ export interface WalletCreationResult {
 }
 
 /**
- * Initialize Monero library (lazy load)
- */
-export async function initMoneroLib(): Promise<void> {
-  if (typeof window === 'undefined') {
-    throw new Error('Monero library can only be initialized in browser');
-  }
-
-  if (!MoneroWalletFull) {
-    const moneroJs = await import('monero-javascript');
-    MoneroWalletFull = moneroJs.MoneroWalletFull as any;
-    MoneroNetworkType = moneroJs.MoneroNetworkType as any;
-  }
-}
-
-/**
  * Create a new Monero wallet (in-memory, no daemon needed)
  * Returns address, mnemonic, and public keys
  */
 export async function createMoneroWallet(): Promise<WalletCreationResult> {
-  await initMoneroLib();
-
-  if (!MoneroWalletFull || !MoneroNetworkType) {
-    throw new Error('Monero library not initialized');
-  }
-
   const wallet = await MoneroWalletFull.createWallet({
     networkType: MoneroNetworkType.MAINNET,
     password: '', // Empty password for in-memory wallet
@@ -89,11 +59,6 @@ export async function getMoneroBalance(
   mnemonic: string,
   config: MoneroWalletConfig
 ): Promise<string> {
-  await initMoneroLib();
-
-  if (!MoneroWalletFull || !MoneroNetworkType) {
-    throw new Error('Monero library not initialized');
-  }
 
   const networkType = config.networkType === 'mainnet' 
     ? MoneroNetworkType.MAINNET 
@@ -139,12 +104,6 @@ export async function sendMonero(
   amount: number,
   config: MoneroWalletConfig
 ): Promise<string> {
-  await initMoneroLib();
-
-  if (!MoneroWalletFull || !MoneroNetworkType) {
-    throw new Error('Monero library not initialized');
-  }
-
   const networkType = config.networkType === 'mainnet' 
     ? MoneroNetworkType.MAINNET 
     : config.networkType === 'testnet'

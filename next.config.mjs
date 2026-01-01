@@ -18,6 +18,12 @@ const nextConfig = {
   // Webpack config for monero-javascript (Node.js modules in browser)
   webpack: (config, { isServer }) => {
     if (!isServer) {
+      // Completely ignore monero-javascript in client bundle
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'monero-javascript': false,
+      };
+      
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
@@ -30,10 +36,16 @@ const nextConfig = {
         zlib: false,
         path: false,
         os: false,
+        child_process: false,
+        dns: false,
+        process: false,
       };
     }
     return config;
   },
+  
+  // Keep monero-javascript server-side only
+  serverExternalPackages: ['monero-javascript'],
 };
 
 export default nextConfig;
