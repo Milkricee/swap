@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWallets } from '@/lib/wallets/index';
 import { z } from 'zod';
+
+/**
+ * POST /api/wallets/create
+ * 
+ * DEPRECATED: Wallet creation happens client-side only!
+ * monero-javascript cannot run in Vercel Serverless environment.
+ * 
+ * Client should call wallet creation functions directly in browser.
+ */
 
 // Validation schema
 const CreateWalletsSchema = z.object({
@@ -31,10 +39,31 @@ export async function POST(request: NextRequest) {
 
     // Validate request body
     const body = await request.json();
-    const validated = CreateWalletsSchema.parse(body);
+    CreateWalletsSchema.parse(body);
 
-    // Create wallets with user password (PBKDF2 encryption)
-    const wallets = await createWallets(validated.password);
+    // Return success - actual wallet creation happens client-side
+    return NextResponse.json({ 
+      message: 'Wallet creation should be done client-side',
+      rateLimit: {
+        remaining: RATE_LIMIT - recentRequests.length - 1,
+        resetAt: new Date(now + RATE_WINDOW).toISOString()
+      }
+    }, { status: 200 });
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: error.errors },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Request failed' },
+      { status: 500 }
+    );
+  }
+}
 
     return NextResponse.json({ wallets }, { status: 201 });
   } catch (error) {

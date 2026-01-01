@@ -38,16 +38,33 @@ export default function WalletView() {
       getCryptoPrices();
     }, 300000); // 5 minutes
     
+  useEffect(() => {
+    loadWallets();
+    
+    // Load prices on mount and every 5 minutes
+    getCryptoPrices();
+    const interval = setInterval(() => {
+      getCryptoPrices();
+    }, 300000); // 5 minutes
+    
     return () => clearInterval(interval);
   }, []);
 
   async function loadWallets() {
     try {
-      const response = await fetch('/api/wallets');
-      const data = await response.json();
-      setWallets(data.wallets);
+      // Read directly from localStorage (client-side only)
+      const publicData = localStorage.getItem('xmr_wallets_public');
+      if (!publicData) {
+        setWallets(null);
+        setLoading(false);
+        return;
+      }
+
+      const wallets = JSON.parse(publicData);
+      setWallets(wallets);
     } catch (error) {
       console.error('Failed to load wallets:', error);
+      setWallets(null);
     } finally {
       setLoading(false);
     }
@@ -63,22 +80,16 @@ export default function WalletView() {
     setShowPasswordSetup(false);
     
     try {
-      const response = await fetch('/api/wallets/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newPassword }),
-      });
+      // Import wallet functions client-side only
+      const { createWallets } = await import('@/lib/wallets/index');
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Failed to create wallets');
-      }
+      // Create wallets directly in browser (no API call)
+      const newWallets = await createWallets(newPassword);
       
       // Store password in session (30min auto-lock)
       setPassword(newPassword);
       
-      setWallets(data.wallets);
+      setWallets(newWallets);
       setJustCreated(true);
       
       // Automatically show seed backup modal after creation
