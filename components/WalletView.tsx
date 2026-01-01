@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { XMRWallet } from '@/types/wallet';
-import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine } from 'lucide-react';
+import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine, Shield } from 'lucide-react';
+import SeedBackupModal from '@/components/SeedBackupModal';
 
 export default function WalletView() {
   const [wallets, setWallets] = useState<XMRWallet[] | null>(null);
@@ -13,6 +14,8 @@ export default function WalletView() {
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [consolidating, setConsolidating] = useState(false);
+  const [showSeedBackup, setShowSeedBackup] = useState(false);
+  const [justCreated, setJustCreated] = useState(false);
 
   useEffect(() => {
     loadWallets();
@@ -46,6 +49,13 @@ export default function WalletView() {
       }
       
       setWallets(data.wallets);
+      setJustCreated(true);
+      
+      // Automatically show seed backup modal after creation
+      setTimeout(() => {
+        setShowSeedBackup(true);
+      }, 500);
+      
     } catch (error) {
       console.error('Failed to create wallets:', error);
       alert('Wallet creation failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -320,6 +330,29 @@ export default function WalletView() {
           <div className="text-xs text-white/50">5-Way Split</div>
         </Card>
       </div>
+      
+      {/* Seed Backup Modal */}
+      {showSeedBackup && (
+        <SeedBackupModal
+          onClose={() => setShowSeedBackup(false)}
+          onConfirmed={() => {
+            setShowSeedBackup(false);
+            setJustCreated(false);
+          }}
+        />
+      )}
+      
+      {/* Backup Seeds Button (show if wallets exist but not just created) */}
+      {wallets && !justCreated && (
+        <Button
+          onClick={() => setShowSeedBackup(true)}
+          variant="outline"
+          className="w-full border-white/10 text-white hover:bg-white/10 mt-4"
+        >
+          <Shield className="w-4 h-4 mr-2" />
+          View/Backup Wallet Seeds
+        </Button>
+      )}
     </div>
   );
 }

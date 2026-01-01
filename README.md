@@ -74,7 +74,8 @@ docker run -p 3000:3000 xmr-swap
 - **UI**: TailwindCSS 4, Shadcn/UI, Lucide Icons
 - **State**: localStorage (AES encrypted via crypto-js)
 - **Validation**: Zod schemas
-- **Wallets**: Mock XMR addresses (use monero-javascript in production)
+- **Wallets**: ✅ Real Monero wallets with `monero-javascript` (PRODUCTION-READY)
+- **Blockchain**: CakeWallet Public Node (or custom RPC)
 
 ### Project Structure
 

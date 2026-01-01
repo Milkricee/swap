@@ -2,21 +2,15 @@ import { z } from 'zod';
 import CryptoJS from 'crypto-js';
 import type { XMRWallet, EncryptedWalletData } from '@/types/wallet';
 import { WALLET_DISTRIBUTION } from '@/types/wallet';
-
-// Monero-javascript import (client-side only)
-let MoneroWalletFull: any = null;
-let MoneroNetworkType: any = null;
-
-// Initialize Monero library (lazy load for browser)
-async function initMonero() {
-  if (typeof window === 'undefined') return;
-  
-  if (!MoneroWalletFull) {
-    const moneroJs = await import('monero-javascript');
-    MoneroWalletFull = moneroJs.MoneroWalletFull;
-    MoneroNetworkType = moneroJs.MoneroNetworkType;
-  }
-}
+import {
+  createMoneroWallet,
+  getMoneroBalance,
+  sendMonero,
+  getRestoreHeight,
+  isValidMoneroAddress,
+  estimateTransactionFee,
+  type MoneroWalletConfig,
+} from './monero-core';
 
 // Zod Schemas
 const WalletSchema = z.object({
@@ -76,61 +70,50 @@ export async function createWallets(): Promise<XMRWallet[]> {
     throw new Error('Wallets can only be created in browser');
   }
 
-  await initMonero();
-
   const wallets: XMRWallet[] = [];
   const seeds: string[] = [];
   const addresses: string[] = [];
+  const createdAt = Date.now();
 
   try {
-    console.log('🔐 Creating 5 XMR wallets...');
+    console.log('🔐 Creating 5 XMR wallets with monero-javascript...');
 
     // Create 5 wallets in-memory
     for (let i = 0; i < 5; i++) {
       console.log(`Creating wallet ${i + 1}/5...`);
 
-      // Create wallet in-memory (no daemon connection needed for address generation)
-      const wallet = await MoneroWalletFull.createWallet({
-        networkType: MoneroNetworkType.MAINNET,
-        password: '', // Empty password for in-memory wallet
-      });
+      const walletData = await createMoneroWallet();
 
-      const mnemonic = await wallet.getMnemonic();
-      const primaryAddress = await wallet.getPrimaryAddress();
-      const publicViewKey = await wallet.getPublicViewKey();
-      const publicSpendKey = await wallet.getPublicSpendKey();
-
-      seeds.push(mnemonic);
-      addresses.push(primaryAddress);
+      seeds.push(walletData.mnemonic);
+      addresses.push(walletData.address);
 
       wallets.push({
         id: i,
-        address: primaryAddress,
+        address: walletData.address,
         balance: '0.000000000000',
         type: WALLET_TYPES[i],
         label: WALLET_LABELS[i],
-        publicViewKey,
-        publicSpendKey,
+        publicViewKey: walletData.publicViewKey,
+        publicSpendKey: walletData.publicSpendKey,
       });
-
-      // Close wallet after getting details
-      await wallet.close();
     }
 
     // Encrypt seeds and store
     const encryptedData: EncryptedWalletData = {
       encryptedSeeds: encrypt(JSON.stringify(seeds)),
       walletAddresses: addresses,
-      createdAt: Date.now(),
+      createdAt,
     };
 
     localStorage.setItem(WALLETS_KEY, JSON.stringify(encryptedData));
 
     // Store public wallet data (non-sensitive)
     localStorage.setItem('xmr_wallets_public', JSON.stringify(wallets));
+    localStorage.setItem('xmr_wallets_created_at', createdAt.toString());
 
     console.log('✅ Created 5 XMR wallets (seeds encrypted in localStorage)');
-    console.log('📝 IMPORTANT: Backup your seeds! Use getWalletSeed() in console');
+    console.log('📝 IMPORTANT: Backup your seeds NOW!');
+    console.log('📋 Use: await window.getWalletSeed(0) in console to view seed');
     
     return wallets;
 
@@ -184,39 +167,37 @@ export async function getWalletSeed(walletId: number): Promise<string | null> {
 
 /**
  * Get wallet balance from public Monero node
- * Uses view-only wallet to scan for balance
+ * Uses optimized restore height for faster sync
  */
 export async function getWalletBalance(walletId: number): Promise<string> {
   if (typeof window === 'undefined') return '0.000000000000';
 
   try {
-    await initMonero();
-    
     const wallets = await getWallets();
     if (!wallets || !wallets[walletId]) return '0.000000000000';
 
-    const wallet = wallets[walletId];
     const seed = await getWalletSeed(walletId);
     if (!seed) return '0.000000000000';
 
-    // Create view-only wallet to check balance
-    const rpcUrl = process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081';
-    
-    const moneroWallet = await MoneroWalletFull.createWallet({
-      networkType: MoneroNetworkType.MAINNET,
-      mnemonic: seed,
-      restoreHeight: 0, // Full sync (slow) - for production use specific height
-      serverUri: rpcUrl,
-      password: '',
-    });
+    // Get wallet creation date for restore height optimization
+    const createdAtStr = localStorage.getItem('xmr_wallets_created_at');
+    const createdAt = createdAtStr ? parseInt(createdAtStr) : Date.now();
+    const restoreHeight = getRestoreHeight(new Date(createdAt));
 
-    await moneroWallet.sync(); // Sync blockchain
-    const balance = await moneroWallet.getBalance();
-    const balanceXMR = (Number(balance) / 1e12).toFixed(12); // Convert atomic units to XMR
+    // Configure remote node
+    const config: MoneroWalletConfig = {
+      rpcUrl: process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081',
+      networkType: (process.env.NEXT_PUBLIC_MONERO_NETWORK as any) || 'mainnet',
+      restoreHeight,
+    };
 
-    await moneroWallet.close();
+    console.log(`🔍 Fetching balance for wallet ${walletId} (restore height: ${restoreHeight})...`);
 
-    return balanceXMR;
+    const balance = await getMoneroBalance(seed, config);
+
+    console.log(`Wallet ${walletId}: ${balance} XMR`);
+
+    return balance;
 
   } catch (error) {
     console.error(`Failed to get balance for wallet ${walletId}:`, error);
@@ -233,14 +214,13 @@ export async function updateWalletBalances(): Promise<XMRWallet[]> {
 
   console.log('🔄 Updating wallet balances (this may take a while)...');
 
-  // Update balances in parallel (can be slow with full sync)
-  const updatedWallets = await Promise.all(
-    wallets.map(async (wallet) => {
-      const balance = await getWalletBalance(wallet.id);
-      console.log(`Wallet ${wallet.id}: ${balance} XMR`);
-      return { ...wallet, balance };
-    })
-  );
+  // Update balances sequentially to avoid overwhelming the remote node
+  const updatedWallets: XMRWallet[] = [];
+  for (const wallet of wallets) {
+    const balance = await getWalletBalance(wallet.id);
+    console.log(`Wallet ${wallet.id}: ${balance} XMR`);
+    updatedWallets.push({ ...wallet, balance });
+  }
 
   // Update storage
   if (typeof window !== 'undefined') {
@@ -280,8 +260,6 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
   if (typeof window === 'undefined') return false;
 
   try {
-    await initMonero();
-
     const wallets = await getWallets();
     if (!wallets) throw new Error('No wallets found');
 
@@ -300,6 +278,17 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
     // Collect from other wallets (0,1,3,4)
     const sourceWalletIds = [0, 1, 3, 4];
     
+    // Get wallet creation date for restore height
+    const createdAtStr = localStorage.getItem('xmr_wallets_created_at');
+    const createdAt = createdAtStr ? parseInt(createdAtStr) : Date.now();
+    const restoreHeight = getRestoreHeight(new Date(createdAt));
+    
+    const config: MoneroWalletConfig = {
+      rpcUrl: process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081',
+      networkType: (process.env.NEXT_PUBLIC_MONERO_NETWORK as any) || 'mainnet',
+      restoreHeight,
+    };
+    
     for (const sourceId of sourceWalletIds) {
       const sourceWallet = wallets[sourceId];
       const sourceBalance = parseFloat(sourceWallet.balance);
@@ -311,39 +300,20 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
         const seed = await getWalletSeed(sourceId);
         if (!seed) continue;
 
-        // Open source wallet
-        const rpcUrl = process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081';
-        const moneroWallet = await MoneroWalletFull.createWallet({
-          networkType: MoneroNetworkType.MAINNET,
-          mnemonic: seed,
-          restoreHeight: 0,
-          serverUri: rpcUrl,
-          password: '',
-        });
+        try {
+          // Send using monero-core
+          const amountToSend = Math.min(sourceBalance - 0.0001, needed);
+          const txHash = await sendMonero(seed, hotWallet.address, amountToSend, config);
 
-        await moneroWallet.sync();
+          console.log(`✅ Sent ${amountToSend} XMR from wallet ${sourceId} to hot wallet`);
+          console.log(`TX Hash: ${txHash}`);
 
-        // Create transaction to hot wallet
-        const amountToSend = Math.min(sourceBalance - 0.0001, needed); // Keep some for fees
-        const atomicAmount = BigInt(Math.floor(amountToSend * 1e12));
-
-        const txConfig = {
-          accountIndex: 0,
-          address: hotWallet.address,
-          amount: atomicAmount.toString(),
-          relay: true, // Broadcast to network
-        };
-
-        const tx = await moneroWallet.createTx(txConfig);
-        await moneroWallet.relayTx(tx);
-
-        console.log(`✅ Sent ${amountToSend} XMR from wallet ${sourceId} to hot wallet`);
-        console.log(`TX Hash: ${tx.getHash()}`);
-
-        await moneroWallet.close();
-
-        // Check if we have enough now
-        if (amountToSend >= needed) break;
+          // Check if we have enough now
+          if (amountToSend >= needed) break;
+        } catch (error) {
+          console.error(`Failed to send from wallet ${sourceId}:`, error);
+          continue;
+        }
       }
     }
 

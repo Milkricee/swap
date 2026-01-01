@@ -3,7 +3,16 @@ import {
   getWallets,
   consolidateToHotWallet,
   getHotWalletBalance,
+  getWalletSeed,
 } from '@/lib/wallets/index';
+import {
+  sendMonero,
+  getMoneroBalance,
+  estimateTransactionFee,
+  isValidMoneroAddress,
+  getRestoreHeight,
+  type MoneroWalletConfig,
+} from '@/lib/wallets/monero-core';
 import type { XMRWallet } from '@/types/wallet';
 
 // Zod Schemas
@@ -100,7 +109,7 @@ export async function executePayment(
 
 /**
  * Send exact payment from Hot Wallet (Wallet #3)
- * CRITICAL: Must send EXACT amount to shop
+ * REAL Implementation with monero-javascript
  */
 async function sendExactPayment(
   shopAddress: string,
@@ -108,28 +117,49 @@ async function sendExactPayment(
   label?: string
 ): Promise<string> {
   try {
-    // In production: Use monero-javascript wallet.createTx()
-    // Must ensure EXACT amount reaches shop (handle fees separately)
+    // Validate address
+    if (!isValidMoneroAddress(shopAddress)) {
+      throw new Error('Invalid Monero address');
+    }
+
+    // Get Hot Wallet seed (id=2)
+    const hotWalletId = 2;
+    const seed = await getWalletSeed(hotWalletId);
     
-    // Mock transaction
-    const txId = `xmr_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // In production:
-    // 1. Get Hot Wallet from encrypted storage
-    // 2. Create transaction with EXACT amount
-    // 3. Sign and broadcast
-    // 4. Return transaction ID
-    
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    console.log(`Payment sent: ${exactAmount} XMR to ${shopAddress}`);
-    console.log(`Label: ${label || 'N/A'}`);
-    console.log(`TX ID: ${txId}`);
-    
-    return txId;
+    if (!seed) {
+      throw new Error('Hot wallet seed not found');
+    }
+
+    // Get wallet creation date for restore height
+    const createdAtStr = localStorage.getItem('xmr_wallets_created_at');
+    const createdAt = createdAtStr ? parseInt(createdAtStr) : Date.now();
+    const restoreHeight = getRestoreHeight(new Date(createdAt));
+
+    // Configure remote node
+    const config: MoneroWalletConfig = {
+      rpcUrl: process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'https://xmr-node.cakewallet.com:18081',
+      networkType: (process.env.NEXT_PUBLIC_MONERO_NETWORK as any) || 'mainnet',
+      restoreHeight,
+    };
+
+    console.log(`💸 Sending ${exactAmount} XMR to ${shopAddress}`);
+    console.log(`📝 Label: ${label || 'N/A'}`);
+
+    // Send transaction using monero-core
+    const txHash = await sendMonero(
+      seed,
+      shopAddress,
+      exactAmount,
+      config
+    );
+
+    console.log(`✅ Payment broadcasted! TX Hash: ${txHash}`);
+
+    return txHash;
+
   } catch (error) {
-    throw new Error(`Send payment failed: ${error}`);
+    console.error('Send payment failed:', error);
+    throw new Error(`Send payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -137,20 +167,14 @@ async function sendExactPayment(
  * Validate XMR address format
  */
 export function validateXMRAddress(address: string): boolean {
-  // XMR addresses:
-  // - Standard: 95 chars, starts with 4
-  // - Integrated: 106 chars, starts with 4
-  // - Subaddress: 95 chars, starts with 8
-  
-  if (!address) return false;
-  
-  const validLengths = [95, 106];
-  const validPrefixes = ['4', '8'];
-  
-  return (
-    validLengths.includes(address.length) &&
-    validPrefixes.includes(address[0])
-  );
+  return isValidMoneroAddress(address);
+}
+
+/**
+ * Estimate payment fee
+ */
+export function estimatePaymentFee(): number {
+  return estimateTransactionFee();
 }
 
 /**
