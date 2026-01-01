@@ -47,10 +47,13 @@ export async function findBestSwapRoute(
   const toAmount = amount - fee;
 
   return {
-    provider: bestProvider,
+    provider: bestProvider.name,
+    fromCoin,
+    toCoin,
     fromAmount: amount.toString(),
     toAmount: toAmount.toString(),
     fee: fee.toString(),
     estimatedTime: bestProvider.estimatedTime,
+    rate: (toAmount / amount).toString(),
   };
 }

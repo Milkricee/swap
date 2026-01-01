@@ -1,5 +1,22 @@
 import { z } from 'zod';
 import type { SwapRoute, SwapProvider } from '@/types/wallet';
+import {
+  getBTCSwapXMRQuote,
+  createBTCSwapXMRSwap,
+  getBTCSwapXMRStatus,
+} from './btcswapxmr';
+import {
+  getChangeNOWQuote,
+  createChangeNOWExchange,
+  getChangeNOWStatus,
+  getChangeNOWMinAmount,
+} from './changenow';
+import {
+  getGhostSwapQuote,
+  createGhostSwapOrder,
+  getGhostSwapStatus,
+  GHOSTSWAP_ALTERNATIVES,
+} from './ghostswap';
 
 // Zod Schemas
 const SwapRequestSchema = z.object({
@@ -38,7 +55,7 @@ const PROVIDERS: Record<string, SwapProvider> = {
 
 /**
  * Find best swap route across all providers
- * Queries REAL APIs where available
+ * Queries REAL APIs in parallel and returns best rate
  */
 export async function getBestRoute(
   fromCoin: string,
@@ -53,13 +70,37 @@ export async function getBestRoute(
       amount,
     });
 
-    // Query all providers in parallel
-    const routes = await Promise.allSettled([
-      getBTCSwapXMRRoute(validated.fromCoin, validated.amount),
-      getChangeNOWRoute(validated.fromCoin, validated.amount),
-      getGhostSwapRoute(validated.fromCoin, validated.amount),
-      getJupiterRoute(validated.fromCoin, validated.amount),
-    ]);
+    console.log(`🔍 Querying swap providers for ${amount} ${fromCoin} → ${toCoin}...`);
+
+    // Query providers in parallel based on supported pairs
+    const routePromises: Promise<SwapRoute | null>[] = [];
+
+    if (fromCoin === 'BTC') {
+      routePromises.push(getBTCSwapXMRRoute(amount));
+      routePromises.push(getChangeNOWRoute('BTC', amount));
+      routePromises.push(getGhostSwapRoute('BTC', amount));
+    }
+
+    if (fromCoin === 'ETH') {
+      routePromises.push(getChangeNOWRoute('ETH', amount));
+      routePromises.push(getGhostSwapRoute('ETH', amount));
+    }
+
+    if (fromCoin === 'USDC') {
+      routePromises.push(getChangeNOWRoute('USDC', amount));
+    }
+
+    if (fromCoin === 'LTC') {
+      routePromises.push(getChangeNOWRoute('LTC', amount));
+      routePromises.push(getGhostSwapRoute('LTC', amount));
+    }
+
+    if (fromCoin === 'SOL') {
+      // SOL requires 2-step: SOL → USDC → XMR (not implemented yet)
+      console.warn('⚠️ SOL swaps not yet implemented');
+    }
+
+    const routes = await Promise.allSettled(routePromises);
 
     // Filter successful routes
     const validRoutes = routes
@@ -68,13 +109,17 @@ export async function getBestRoute(
       .filter((r) => r !== null);
 
     if (validRoutes.length === 0) {
+      console.error('❌ No valid swap routes found');
       return null;
     }
 
     // Sort by total XMR received (highest first)
     validRoutes.sort((a, b) => parseFloat(b.toAmount) - parseFloat(a.toAmount));
 
-    return validRoutes[0];
+    const bestRoute = validRoutes[0];
+    console.log(`✅ Best route: ${bestRoute.provider} - ${bestRoute.toAmount} XMR (fee: ${bestRoute.fee})`);
+
+    return bestRoute;
   } catch (error) {
     console.error('Get best route error:', error);
     return null;
@@ -92,12 +137,23 @@ export async function getAllRoutes(
   try {
     const validated = SwapRequestSchema.parse({ fromCoin, toCoin, amount });
 
-    const routes = await Promise.allSettled([
-      getBTCSwapXMRRoute(validated.fromCoin, validated.amount),
-      getChangeNOWRoute(validated.fromCoin, validated.amount),
-      getGhostSwapRoute(validated.fromCoin, validated.amount),
-      getJupiterRoute(validated.fromCoin, validated.amount),
-    ]);
+    const routePromises: Promise<SwapRoute | null>[] = [];
+
+    if (validated.fromCoin === 'BTC') {
+      routePromises.push(getBTCSwapXMRRoute(amount));
+      routePromises.push(getChangeNOWRoute('BTC', amount));
+      routePromises.push(getGhostSwapRoute('BTC', amount));
+    } else if (validated.fromCoin === 'ETH') {
+      routePromises.push(getChangeNOWRoute('ETH', amount));
+      routePromises.push(getGhostSwapRoute('ETH', amount));
+    } else if (validated.fromCoin === 'USDC') {
+      routePromises.push(getChangeNOWRoute('USDC', amount));
+    } else if (validated.fromCoin === 'LTC') {
+      routePromises.push(getChangeNOWRoute('LTC', amount));
+      routePromises.push(getGhostSwapRoute('LTC', amount));
+    }
+
+    const routes = await Promise.allSettled(routePromises);
 
     const validRoutes = routes
       .filter((r) => r.status === 'fulfilled' && r.value !== null)
@@ -115,220 +171,81 @@ export async function getAllRoutes(
 }
 
 /**
- * BTCSwapXMR Provider - REAL API
- * Docs: https://btcswapxmr.com/api
+ * BTCSwapXMR Provider Route
  */
-async function getBTCSwapXMRRoute(
-  fromCoin: string,
-  amount: number
-): Promise<SwapRoute | null> {
-  if (fromCoin !== 'BTC') return null;
-
+async function getBTCSwapXMRRoute(amount: number): Promise<SwapRoute | null> {
   try {
-    console.log(`🔍 Querying BTCSwapXMR for ${amount} BTC...`);
-
-    // REAL API CALL
-    const response = await fetch(
-      `https://btcswapxmr.com/api/quote?from=BTC&to=XMR&amount=${amount}`,
-      {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      }
-    );
-
-    if (!response.ok) {
-      console.warn('BTCSwapXMR API failed:', response.status);
-      // Fallback to mock
-      return getMockBTCSwapXMRRoute(amount);
-    }
-
-    const data = await response.json();
-
-    // Parse API response (adjust based on actual API structure)
-    const estimatedXMR = parseFloat(data.estimatedAmount || data.toAmount || '0');
-    const feeAmount = amount * PROVIDERS.btcswapxmr.fee;
-
-    if (estimatedXMR === 0) {
-      return getMockBTCSwapXMRRoute(amount);
-    }
+    const quote = await getBTCSwapXMRQuote('BTC', 'XMR', amount);
 
     return {
-      provider: PROVIDERS.btcswapxmr,
-      fromAmount: amount.toString(),
-      toAmount: estimatedXMR.toFixed(12),
-      fee: feeAmount.toFixed(8),
-      estimatedTime: PROVIDERS.btcswapxmr.estimatedTime,
+      provider: 'BTCSwapXMR',
+      fromCoin: 'BTC',
+      toCoin: 'XMR',
+      fromAmount: quote.fromAmount.toString(),
+      toAmount: quote.toAmount.toString(),
+      fee: quote.fee.toString(),
+      estimatedTime: quote.estimatedTime,
+      rate: quote.rate.toString(),
     };
-
   } catch (error) {
-    console.error('BTCSwapXMR API error:', error);
-    // Fallback to mock
-    return getMockBTCSwapXMRRoute(amount);
-  }
-}
-
-/**
- * BTCSwapXMR Mock Fallback
- */
-function getMockBTCSwapXMRRoute(amount: number): SwapRoute {
-  const provider = PROVIDERS.btcswapxmr;
-  const feeAmount = amount * provider.fee;
-  const btcToXmrRate = 350; // Mock rate
-  const estimatedXMR = (amount - feeAmount) * btcToXmrRate;
-
-  return {
-    provider,
-    fromAmount: amount.toString(),
-    toAmount: estimatedXMR.toFixed(12),
-    fee: feeAmount.toFixed(8),
-    estimatedTime: provider.estimatedTime,
-  };
-}
-
-/**
- * ChangeNOW Provider - REAL API
- * Docs: https://changenow.io/api/docs
- */
-async function getChangeNOWRoute(
-  fromCoin: string,
-  amount: number
-): Promise<SwapRoute | null> {
-  const supportedCoins = ['ETH', 'LTC', 'USDC'];
-  if (!supportedCoins.includes(fromCoin)) return null;
-
-  try {
-    console.log(`🔍 Querying ChangeNOW for ${amount} ${fromCoin}...`);
-
-    // REAL API CALL (v2)
-    const fromTicker = fromCoin.toLowerCase();
-    const response = await fetch(
-      `https://api.changenow.io/v2/exchange/estimated-amount?fromCurrency=${fromTicker}&toCurrency=xmr&fromAmount=${amount}&fromNetwork=${fromTicker}&toNetwork=xmr&flow=standard&type=direct`,
-      {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      }
-    );
-
-    if (!response.ok) {
-      console.warn('ChangeNOW API failed:', response.status);
-      return getMockChangeNOWRoute(fromCoin, amount);
-    }
-
-    const data = await response.json();
-
-    // Parse response
-    const estimatedXMR = parseFloat(data.toAmount || '0');
-    const feeAmount = amount * PROVIDERS.changenow.fee;
-
-    if (estimatedXMR === 0) {
-      return getMockChangeNOWRoute(fromCoin, amount);
-    }
-
-    return {
-      provider: PROVIDERS.changenow,
-      fromAmount: amount.toString(),
-      toAmount: estimatedXMR.toFixed(12),
-      fee: feeAmount.toFixed(8),
-      estimatedTime: PROVIDERS.changenow.estimatedTime,
-    };
-
-  } catch (error) {
-    console.error('ChangeNOW API error:', error);
-    return getMockChangeNOWRoute(fromCoin, amount);
-  }
-}
-
-/**
- * ChangeNOW Mock Fallback
- */
-function getMockChangeNOWRoute(fromCoin: string, amount: number): SwapRoute {
-  const provider = PROVIDERS.changenow;
-  const feeAmount = amount * provider.fee;
-
-  // Mock rates
-  const rates: Record<string, number> = {
-    ETH: 80,    // 1 ETH = 80 XMR
-    LTC: 0.4,   // 1 LTC = 0.4 XMR
-    USDC: 0.006, // 1 USDC = 0.006 XMR
-  };
-
-  const rate = rates[fromCoin] || 1;
-  const estimatedXMR = (amount - feeAmount) * rate;
-
-  return {
-    provider,
-    fromAmount: amount.toString(),
-    toAmount: estimatedXMR.toFixed(12),
-    fee: feeAmount.toFixed(8),
-    estimatedTime: provider.estimatedTime,
-  };
-}
-
-/**
- * GhostSwap Provider - MOCK (No public API)
- */
-async function getGhostSwapRoute(
-  fromCoin: string,
-  amount: number
-): Promise<SwapRoute | null> {
-  const supportedCoins = ['BTC', 'ETH', 'LTC'];
-  if (!supportedCoins.includes(fromCoin)) return null;
-
-  try {
-    const provider = PROVIDERS.ghostswap;
-    const feeAmount = amount * provider.fee;
-
-    // Mock rates (slightly better than ChangeNOW)
-    const rates: Record<string, number> = {
-      BTC: 352,  // 1 BTC = 352 XMR
-      ETH: 81,   // 1 ETH = 81 XMR
-      LTC: 0.41, // 1 LTC = 0.41 XMR
-    };
-
-    const rate = rates[fromCoin] || 1;
-    const estimatedXMR = (amount - feeAmount) * rate;
-
-    return {
-      provider,
-      fromAmount: amount.toString(),
-      toAmount: estimatedXMR.toFixed(12),
-      fee: feeAmount.toFixed(8),
-      estimatedTime: provider.estimatedTime,
-    };
-
-  } catch (error) {
-    console.error('GhostSwap error:', error);
+    console.error('BTCSwapXMR route error:', error);
     return null;
   }
 }
 
 /**
- * Jupiter Provider - MOCK (SOL → XMR via multiple hops)
+ * ChangeNOW Provider Route
  */
-async function getJupiterRoute(
+async function getChangeNOWRoute(
   fromCoin: string,
   amount: number
 ): Promise<SwapRoute | null> {
-  if (fromCoin !== 'SOL') return null;
-
   try {
-    const provider = PROVIDERS.jupiter;
-    const feeAmount = amount * provider.fee;
-
-    // Mock rate
-    const solToXmrRate = 0.5; // 1 SOL = 0.5 XMR
-    const estimatedXMR = (amount - feeAmount) * solToXmrRate;
+    const quote = await getChangeNOWQuote(fromCoin, 'XMR', amount);
 
     return {
-      provider,
-      fromAmount: amount.toString(),
-      toAmount: estimatedXMR.toFixed(12),
-      fee: feeAmount.toFixed(8),
-      estimatedTime: provider.estimatedTime,
+      provider: 'ChangeNOW',
+      fromCoin,
+      toCoin: 'XMR',
+      fromAmount: quote.fromAmount.toString(),
+      toAmount: quote.toAmount.toString(),
+      fee: quote.fee.toString(),
+      estimatedTime: quote.estimatedTime,
+      rate: (quote.toAmount / quote.fromAmount).toString(),
     };
-
   } catch (error) {
-    console.error('Jupiter error:', error);
+    console.error('ChangeNOW route error:', error);
+    return null;
+  }
+}
+
+/**
+ * GhostSwap Provider Route (Mock - API offline)
+ */
+async function getGhostSwapRoute(
+  fromCoin: string,
+  amount: number
+): Promise<SwapRoute | null> {
+  try {
+    const quote = await getGhostSwapQuote(fromCoin, 'XMR', amount);
+
+    if (!quote.available) {
+      console.warn('⚠️ GhostSwap unavailable:', quote.message);
+      return null;
+    }
+
+    return {
+      provider: 'GhostSwap',
+      fromCoin,
+      toCoin: 'XMR',
+      fromAmount: quote.fromAmount.toString(),
+      toAmount: quote.toAmount.toString(),
+      fee: quote.fee.toString(),
+      estimatedTime: quote.estimatedTime,
+      rate: (quote.toAmount / quote.fromAmount).toString(),
+    };
+  } catch (error) {
+    console.error('GhostSwap route error:', error);
     return null;
   }
 }
@@ -343,6 +260,22 @@ export function getSupportedCoins(): string[] {
 /**
  * Get all providers
  */
+export function getAllProviders(): SwapProvider[] {
+  return Object.values(PROVIDERS);
+}
+
+// Re-export all provider functions
+export {
+  executeSwap,
+  getSwapStatus,
+  saveSwapToHistory,
+  getSwapHistory,
+  clearSwapHistory,
+  type SwapOrder,
+  type SwapStatus,
+} from './execute';
+
+export type { SwapRoute, SwapProvider };
 export function getProviders(): SwapProvider[] {
   return Object.values(PROVIDERS);
 }

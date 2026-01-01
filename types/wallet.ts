@@ -39,11 +39,14 @@ export interface SwapProvider {
 }
 
 export interface SwapRoute {
-  provider: SwapProvider;
+  provider: string; // Provider name: 'BTCSwapXMR', 'ChangeNOW', etc.
+  fromCoin: string;
+  toCoin: string;
   fromAmount: string;
   toAmount: string;
   fee: string;
   estimatedTime: string;
+  rate: string;
 }
 
 export interface PaymentRequest {

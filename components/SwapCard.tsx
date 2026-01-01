@@ -90,18 +90,18 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
         'BTCSwapXMR': 'https://btcswapxmr.com',
         'ChangeNOW': 'https://changenow.io',
         'GhostSwap': 'https://ghostswap.io',
-        'Jupiter (Mock)': 'https://jup.ag',
+        'Jupiter': 'https://jup.ag',
       };
 
-      const url = providerUrls[route.provider.name] || 'https://example.com';
+      const url = providerUrls[route.provider] || 'https://example.com';
       
       const message = 
         `🚀 Ready to execute swap!\n\n` +
-        `Provider: ${route.provider.name}\n` +
-        `Send: ${route.fromAmount} ${fromCoin}\n` +
-        `Receive: ~${parseFloat(route.toAmount).toFixed(6)} XMR\n` +
-        `Fee: ${route.fee} ${fromCoin}\n\n` +
-        `Opening ${route.provider.name}...`;
+        `Provider: ${route.provider}\n` +
+        `Send: ${route.fromAmount} ${route.fromCoin}\n` +
+        `Receive: ~${parseFloat(route.toAmount).toFixed(6)} ${route.toCoin}\n` +
+        `Fee: ${route.fee}\n\n` +
+        `Opening ${route.provider}...`;
       
       alert(message);
       
@@ -558,13 +558,13 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
               <div>
                 <div className="text-sm text-white/50 mb-1">Best Provider</div>
                 <div className="text-xl font-bold text-[#00d4aa]">
-                  {route.provider.name}
+                  {route.provider}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-sm text-white/50 mb-1">Fee</div>
                 <div className="text-xl font-bold text-white">
-                  {(route.provider.fee * 100).toFixed(2)}%
+                  {route.fee}
                 </div>
               </div>
             </div>
