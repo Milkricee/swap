@@ -3,7 +3,7 @@ import {
   getWallets,
   consolidateToHotWallet,
   getHotWalletBalance,
-} from '@/lib/wallets';
+} from '@/lib/wallets/index';
 import type { XMRWallet } from '@/types/wallet';
 
 // Zod Schemas
@@ -230,7 +230,7 @@ export async function getPaymentEstimate(exactAmount: number): Promise<{
   }
   
   const totalAvailable = wallets.reduce(
-    (sum, w) => sum + parseFloat(w.balance),
+    (sum: number, w: XMRWallet) => sum + parseFloat(w.balance),
     0
   );
   

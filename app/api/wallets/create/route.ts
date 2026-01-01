@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWallets } from '@/lib/wallets';
+import { createWallets } from '@/lib/wallets/index';
 
 // Rate limiting (simple in-memory)
 const rateLimitMap = new Map<string, number[]>();

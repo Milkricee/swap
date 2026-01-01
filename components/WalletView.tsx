@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { XMRWallet } from '@/types/wallet';
-import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine } from 'lucide-react';
 
 export default function WalletView() {
   const [wallets, setWallets] = useState<XMRWallet[] | null>(null);
@@ -12,6 +12,7 @@ export default function WalletView() {
   const [showDetails, setShowDetails] = useState(false);
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [consolidating, setConsolidating] = useState(false);
 
   useEffect(() => {
     loadWallets();
@@ -35,7 +36,7 @@ export default function WalletView() {
       const response = await fetch('/api/wallets/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}), // No password needed
+        body: JSON.stringify({}),
       });
       
       const data = await response.json();
@@ -70,6 +71,50 @@ export default function WalletView() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleConsolidateToHot() {
+    if (!wallets) return;
+    
+    // Calculate total amount in cold wallets (excluding hot wallet #2)
+    const coldWalletsTotal = wallets
+      .filter(w => w.id !== 2)
+      .reduce((sum, w) => sum + parseFloat(w.balance), 0);
+    
+    if (coldWalletsTotal === 0) {
+      alert('No funds in cold wallets to consolidate');
+      return;
+    }
+    
+    const confirmed = confirm(
+      `Consolidate ${coldWalletsTotal.toFixed(6)} XMR from cold wallets to Hot Wallet #2?`
+    );
+    
+    if (!confirmed) return;
+    
+    setConsolidating(true);
+    try {
+      const response = await fetch('/api/wallets/consolidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetAmount: coldWalletsTotal }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Consolidation failed');
+      }
+      
+      // Update wallets with new balances
+      setWallets(data.wallets);
+      alert(`Successfully consolidated ${coldWalletsTotal.toFixed(6)} XMR to Hot Wallet`);
+    } catch (error) {
+      console.error('Failed to consolidate:', error);
+      alert('Consolidation failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setConsolidating(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
@@ -101,13 +146,13 @@ export default function WalletView() {
 
   // Calculate total balance across all 5 wallets (memoized for performance)
   const totalBalance = useMemo(() => 
-    wallets.reduce((sum, w) => sum + parseFloat(w.balance), 0),
+    wallets.reduce((sum: number, w: XMRWallet) => sum + parseFloat(w.balance), 0),
     [wallets]
   );
   
-  // Use Wallet #3 (Hot Wallet) as primary display address
+  // Use Wallet #2 (Hot Wallet) as primary display address
   const primaryWallet = useMemo(() => 
-    wallets.find(w => w.id === 3) || wallets[0],
+    wallets.find(w => w.id === 2) || wallets[0],
     [wallets]
   );
 
@@ -146,7 +191,7 @@ export default function WalletView() {
             <div className="text-lg text-white/50">XMR</div>
           </div>
 
-          {/* Primary Address (Wallet #3 - Hot Wallet) */}
+          {/* Primary Address (Wallet #2 - Hot Wallet) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-white/70">Receiving Address</span>
@@ -192,35 +237,68 @@ export default function WalletView() {
             </div>
           </div>
 
-          {/* Advanced Details (Optional) */}
-          {showDetails && (
-            <div className="pt-4 border-t border-white/10">
-              <details className="group">
-                <summary className="cursor-pointer text-sm text-white/70 hover:text-white flex items-center gap-2">
-                  <span className="group-open:rotate-90 transition-transform">▶</span>
-                  Advanced: Multi-Wallet Distribution
-                </summary>
-                <div className="mt-4 space-y-2">
-                  {wallets.map((wallet) => (
-                    <div
-                      key={wallet.id}
-                      className="flex items-center justify-between text-xs p-2 rounded bg-white/5"
-                    >
-                      <span className="text-white/50">
-                        Wallet #{wallet.id} ({wallet.type})
-                      </span>
-                      <span className="text-white font-mono">
-                        {parseFloat(wallet.balance).toFixed(6)} XMR
-                      </span>
-                    </div>
-                  ))}
-                  <div className="pt-2 text-xs text-white/50">
-                    💡 Funds are distributed across 5 wallets for enhanced privacy
-                  </div>
-                </div>
-              </details>
+          {/* Wallet Grid - All 5 Wallets */}
+          <div className="pt-4 border-t border-white/10 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-white">Wallet Distribution</h4>
+              <Button
+                onClick={handleConsolidateToHot}
+                size="sm"
+                disabled={consolidating || totalBalance === 0}
+                className="bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30"
+              >
+                <ArrowDownToLine className={`w-4 h-4 mr-2 ${consolidating ? 'animate-bounce' : ''}`} />
+                {consolidating ? 'Consolidating...' : 'Consolidate to Hot'}
+              </Button>
             </div>
-          )}
+
+            {/* Mobile-Responsive Grid: 1-col → 2-col → 5-col */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {wallets.map((wallet) => {
+                const isHot = wallet.id === 2;
+                const badgeColor = isHot ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+                const badgeText = isHot ? 'HOT' : 'COLD';
+                
+                return (
+                  <Card
+                    key={wallet.id}
+                    className={`backdrop-blur-md bg-white/5 border-white/10 p-4 transition-all ${
+                      isHot ? 'ring-2 ring-orange-500/30' : ''
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      {/* Wallet Number + Badge */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white/70">
+                          Wallet #{wallet.id}
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badgeColor}`}>
+                          {badgeText}
+                        </span>
+                      </div>
+
+                      {/* Balance */}
+                      <div>
+                        <div className="text-lg font-bold text-white">
+                          {parseFloat(wallet.balance).toFixed(4)}
+                        </div>
+                        <div className="text-xs text-white/50">XMR</div>
+                      </div>
+
+                      {/* Type Label */}
+                      <div className="text-xs text-white/40 capitalize">
+                        {wallet.type}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 text-xs text-white/50 text-center">
+              💡 Funds are distributed across 5 wallets for enhanced privacy
+            </div>
+          </div>
         </div>
       </Card>
 

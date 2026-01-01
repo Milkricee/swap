@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getWallets } from '@/lib/wallets';
+import { getWallets } from '@/lib/wallets/index';
 
 export async function GET() {
   try {

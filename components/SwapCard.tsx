@@ -85,8 +85,29 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
 
     setLoading(true);
     try {
-      console.log('Executing swap:', route);
-      alert(`Swap executed! You will receive ${route.toAmount} ${toCoin}`);
+      // Show provider URL for manual execution
+      const providerUrls: Record<string, string> = {
+        'BTCSwapXMR': 'https://btcswapxmr.com',
+        'ChangeNOW': 'https://changenow.io',
+        'GhostSwap': 'https://ghostswap.io',
+        'Jupiter (Mock)': 'https://jup.ag',
+      };
+
+      const url = providerUrls[route.provider.name] || 'https://example.com';
+      
+      const message = 
+        `🚀 Ready to execute swap!\n\n` +
+        `Provider: ${route.provider.name}\n` +
+        `Send: ${route.fromAmount} ${fromCoin}\n` +
+        `Receive: ~${parseFloat(route.toAmount).toFixed(6)} XMR\n` +
+        `Fee: ${route.fee} ${fromCoin}\n\n` +
+        `Opening ${route.provider.name}...`;
+      
+      alert(message);
+      
+      // Open provider in new tab
+      window.open(url, '_blank');
+      
       setAmount('');
       setRoute(null);
     } catch (err) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { consolidateToHotWallet, getWallets } from '@/lib/wallets';
+import { consolidateToHotWallet, getWallets } from '@/lib/wallets/index';
 import { z } from 'zod';
 
 const ConsolidateSchema = z.object({

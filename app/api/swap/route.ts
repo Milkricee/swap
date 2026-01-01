@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBestRoute } from '@/lib/swap-providers';
+import { getBestRoute, getAllRoutes } from '@/lib/swap-providers/index';
 import { z } from 'zod';
 
 const SwapRequestSchema = z.object({
   fromCoin: z.enum(['BTC', 'ETH', 'LTC', 'SOL', 'USDC']),
   toCoin: z.literal('XMR'),
   amount: z.number().positive().max(1000000),
+  getAllRoutes: z.boolean().optional(),
 });
 
 // Rate limiting
@@ -33,6 +34,17 @@ export async function POST(request: NextRequest) {
     // Validate request
     const body = await request.json();
     const validated = SwapRequestSchema.parse(body);
+
+    // Get routes
+    if (validated.getAllRoutes) {
+      const routes = await getAllRoutes(
+        validated.fromCoin,
+        validated.toCoin,
+        validated.amount
+      );
+
+      return NextResponse.json({ routes }, { status: 200 });
+    }
 
     // Get best route
     const route = await getBestRoute(
