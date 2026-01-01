@@ -7,7 +7,7 @@ const bundleAnalyzer = withBundleAnalyzer({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    optimizePackageImports: ['lucide-react', 'html5-qrcode'],
+    optimizePackageImports: ['lucide-react', 'html5-qrcode', '@radix-ui/react-icons'],
   },
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
@@ -17,6 +17,12 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
+  
+  // Image optimization (for future use)
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 86400, // 24 hours
+  },
   
   // Turbopack config (empty to silence warning)
   turbopack: {},

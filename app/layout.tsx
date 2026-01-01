@@ -10,6 +10,7 @@ const inter = Inter({
   variable: "--font-inter",
   display: "swap",
   preload: true,
+  adjustFontFallback: true, // Better FOIT prevention
 });
 
 export const metadata: Metadata = {
@@ -24,10 +25,11 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
-  icons: {
-    icon: "/icon-192.png",
-    apple: "/icon-512.png",
-  },
+  // Remove icon references until we create actual files
+  // icons: {
+  //   icon: "/icon-192.png",
+  //   apple: "/icon-512.png",
+  // },
 };
 
 export const viewport: Viewport = {
