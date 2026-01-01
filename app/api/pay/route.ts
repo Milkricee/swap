@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executePayment } from '@/lib/payment';
+import { savePaymentToHistory } from '@/lib/payment/history';
 import { z } from 'zod';
 
 const PaymentRequestSchema = z.object({
@@ -61,13 +62,26 @@ export async function POST(request: NextRequest) {
 
     // Return success with consolidation flag
     const consolidationNeeded = status.message.includes('Consolidat');
+    const txId = status.txId || `simulated-tx-${Date.now()}`;
+    
+    // Save to payment history
+    savePaymentToHistory({
+      id: `payment-${Date.now()}`,
+      timestamp: Date.now(),
+      amount: validated.exactAmount.toString(),
+      recipient: validated.shopAddress,
+      status: status.stage === 'completed' ? 'confirmed' : 'pending',
+      txHash: txId,
+      fromWallet: 3, // Hot Wallet
+      fee: '0.000001', // Approximate Monero fee
+    });
     
     return NextResponse.json(
       {
         status: {
           stage: status.stage,
           message: status.message,
-          txId: status.txId || `simulated-tx-${Date.now()}`,
+          txId,
         },
         consolidationNeeded,
       },

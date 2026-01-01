@@ -18,10 +18,15 @@ const ExecuteSwapSchema = z.object({
 });
 
 export interface SwapOrder {
+  id: string; // For consistency with PaymentRecord
   orderId: string;
   provider: string;
   depositAddress: string;
   withdrawalAddress: string;
+  depositCurrency: string; // For TransactionRow display
+  receiveCurrency: string; // For TransactionRow display
+  depositAmount: string; // For TransactionRow display
+  receiveAmount: string; // For TransactionRow display
   fromCoin: string;
   toCoin: string;
   fromAmount: number;
@@ -29,6 +34,7 @@ export interface SwapOrder {
   status: string;
   expiresAt: number;
   createdAt: number;
+  timestamp: number; // For sorting with PaymentRecord
 }
 
 export interface SwapStatus {
@@ -68,18 +74,25 @@ export async function executeSwap(
   switch (validated.provider) {
     case 'BTCSwapXMR': {
       const swap = await createBTCSwapXMRSwap(amount, xmrAddress);
+      const timestamp = Date.now();
       return {
+        id: `swap-${timestamp}`,
         orderId: swap.swapId,
         provider: 'BTCSwapXMR',
         depositAddress: swap.depositAddress,
         withdrawalAddress: swap.withdrawalAddress,
+        depositCurrency: 'BTC',
+        receiveCurrency: 'XMR',
+        depositAmount: swap.amountBTC.toString(),
+        receiveAmount: swap.amountXMR.toString(),
         fromCoin: 'BTC',
         toCoin: 'XMR',
         fromAmount: swap.amountBTC,
         expectedToAmount: swap.amountXMR,
         status: swap.status,
         expiresAt: swap.expiresAt,
-        createdAt: Date.now(),
+        createdAt: timestamp,
+        timestamp,
       };
     }
 
@@ -90,35 +103,49 @@ export async function executeSwap(
         amount,
         xmrAddress
       );
+      const timestamp = Date.now();
       return {
+        id: `swap-${timestamp}`,
         orderId: exchange.exchangeId,
         provider: 'ChangeNOW',
         depositAddress: exchange.depositAddress,
         withdrawalAddress: exchange.withdrawalAddress,
+        depositCurrency: exchange.fromCurrency.toUpperCase(),
+        receiveCurrency: exchange.toCurrency.toUpperCase(),
+        depositAmount: amount.toString(),
+        receiveAmount: exchange.expectedAmount.toString(),
         fromCoin: exchange.fromCurrency.toUpperCase(),
         toCoin: exchange.toCurrency.toUpperCase(),
         fromAmount: amount,
         expectedToAmount: exchange.expectedAmount,
         status: exchange.status,
-        expiresAt: Date.now() + 3600000, // 1 hour
-        createdAt: Date.now(),
+        expiresAt: timestamp + 3600000, // 1 hour
+        createdAt: timestamp,
+        timestamp,
       };
     }
 
     case 'GhostSwap': {
       const order = await createGhostSwapOrder(fromCoin, toCoin, amount, xmrAddress);
+      const timestamp = Date.now();
       return {
+        id: `swap-${timestamp}`,
         orderId: order.orderId,
         provider: 'GhostSwap',
         depositAddress: order.depositAddress,
         withdrawalAddress: order.withdrawalAddress,
+        depositCurrency: fromCoin,
+        receiveCurrency: toCoin,
+        depositAmount: amount.toString(),
+        receiveAmount: '0', // Unknown for mock
         fromCoin,
         toCoin,
         fromAmount: amount,
         expectedToAmount: 0, // Unknown for mock
         status: order.status,
         expiresAt: order.expiresAt,
-        createdAt: Date.now(),
+        createdAt: timestamp,
+        timestamp,
       };
     }
 

@@ -4,12 +4,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { XMRWallet } from '@/types/wallet';
-import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine, Shield, Upload } from 'lucide-react';
+import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine, Shield, Upload, DollarSign } from 'lucide-react';
 import SeedBackupModal from '@/components/SeedBackupModal';
 import WalletRecoveryModal from '@/components/WalletRecoveryModal';
 import { PasswordSetup } from '@/components/PasswordSetup';
 import { useSessionStore } from '@/lib/storage/session';
 import { WalletGridSkeleton } from '@/components/Skeleton';
+import { getCryptoPrices, formatFiatPrice } from '@/lib/pricing/coingecko';
 
 export default function WalletView() {
   const [wallets, setWallets] = useState<XMRWallet[] | null>(null);
@@ -23,11 +24,21 @@ export default function WalletView() {
   const [justCreated, setJustCreated] = useState(false);
   const [showPasswordSetup, setShowPasswordSetup] = useState(false);
   const [creatingWallets, setCreatingWallets] = useState(false);
+  const [fiatCurrency, setFiatCurrency] = useState<'USD' | 'EUR'>('USD');
+  const [showFiat, setShowFiat] = useState(false);
 
   const { password, setPassword, isLocked } = useSessionStore();
 
   useEffect(() => {
     loadWallets();
+    
+    // Load prices on mount and every 5 minutes
+    getCryptoPrices();
+    const interval = setInterval(() => {
+      getCryptoPrices();
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(interval);
   }, []);
 
   async function loadWallets() {
@@ -254,6 +265,24 @@ export default function WalletView() {
               {totalBalance.toFixed(6)}
             </div>
             <div className="text-lg text-white/50">XMR</div>
+            
+            {/* Fiat Price */}
+            {showFiat && (
+              <div className="text-sm text-white/40 mt-2">
+                ≈ {formatFiatPrice(totalBalance.toString(), fiatCurrency, 'XMR')}
+              </div>
+            )}
+            
+            {/* Fiat Toggle */}
+            <Button
+              onClick={() => setShowFiat(!showFiat)}
+              size="sm"
+              variant="ghost"
+              className="mt-2 text-xs text-white/50 hover:text-white/70"
+            >
+              <DollarSign className="w-3 h-3 mr-1" />
+              {showFiat ? 'Hide' : 'Show'} Fiat ({fiatCurrency})
+            </Button>
           </div>
 
           {/* Primary Address (Wallet #2 - Hot Wallet) */}
