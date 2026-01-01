@@ -1,0 +1,16 @@
+# Local environment files
+.env.local
+.env*.local
+
+# Development files
+node_modules
+.next
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Test files
+*.test.ts
+*.test.tsx

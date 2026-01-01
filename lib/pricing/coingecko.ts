@@ -1,6 +1,6 @@
 /**
- * Fiat Pricing via CoinGecko API
- * Free tier: 50 calls/minute
+ * Fiat Pricing via CoinGecko API (Client-Side Helper)
+ * Fetches prices from /api/prices (server-side route)
  * Cache: 5 minutes TTL
  */
 
@@ -16,13 +16,12 @@ export interface PriceCache {
 }
 
 const CACHE_TTL = 300000; // 5 minutes
-const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
 
 let priceCache: PriceCache | null = null;
 
 /**
- * Get cryptocurrency prices from CoinGecko
- * Cached for 5 minutes to respect rate limits
+ * Get cryptocurrency prices from server API
+ * Cached for 5 minutes to reduce requests
  */
 export async function getCryptoPrices(): Promise<Record<string, CryptoPrice>> {
   // Check cache
@@ -31,48 +30,18 @@ export async function getCryptoPrices(): Promise<Record<string, CryptoPrice>> {
   }
 
   try {
-    const res = await fetch(
-      `${COINGECKO_API}?ids=monero,bitcoin,ethereum,solana,usd-coin&vs_currencies=usd,eur,btc`,
-      {
-        headers: {
-          'Accept': 'application/json',
-        },
-      }
-    );
+    // Fetch from our own API route (server-side)
+    const res = await fetch('/api/prices', {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
 
     if (!res.ok) {
-      throw new Error(`CoinGecko API error: ${res.status}`);
+      throw new Error(`Prices API error: ${res.status}`);
     }
 
-    const data = await res.json();
-
-    const prices: Record<string, CryptoPrice> = {
-      XMR: {
-        usd: data.monero?.usd || 0,
-        eur: data.monero?.eur || 0,
-        btc: data.monero?.btc || 0,
-      },
-      BTC: {
-        usd: data.bitcoin?.usd || 0,
-        eur: data.bitcoin?.eur || 0,
-        btc: 1,
-      },
-      ETH: {
-        usd: data.ethereum?.usd || 0,
-        eur: data.ethereum?.eur || 0,
-        btc: data.ethereum?.btc || 0,
-      },
-      SOL: {
-        usd: data.solana?.usd || 0,
-        eur: data.solana?.eur || 0,
-        btc: data.solana?.btc || 0,
-      },
-      USDC: {
-        usd: data['usd-coin']?.usd || 1,
-        eur: data['usd-coin']?.eur || 0.92,
-        btc: data['usd-coin']?.btc || 0,
-      },
-    };
+    const prices = await res.json();
 
     // Update cache
     priceCache = {
@@ -81,7 +50,7 @@ export async function getCryptoPrices(): Promise<Record<string, CryptoPrice>> {
     };
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('💰 Prices updated:', prices.XMR);
+      console.log('💰 Prices updated from API');
     }
 
     return prices;
