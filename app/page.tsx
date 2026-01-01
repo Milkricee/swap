@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import SwapCard from "@/components/SwapCard";
 import WalletView from "@/components/WalletView";
+import PaymentForm from "@/components/PaymentForm";
 
 export default function Home() {
   const [toCoin, setToCoin] = useState('XMR');
@@ -33,6 +34,11 @@ export default function Home() {
             Swap to {toCoin}
           </h2>
           <SwapCard onToCoinChange={setToCoin} />
+        </section>
+
+        {/* Payment Section - Full Width */}
+        <section id="payment-section">
+          <PaymentForm />
         </section>
 
         {/* Footer Info */}
