@@ -361,6 +361,99 @@ export async function distributeToWallets(totalAmount: number): Promise<boolean>
 }
 
 /**
+ * Recover wallets from 25-word seeds
+ * @param seeds - Array of 5 mnemonic seeds (in order: Wallet 1-5)
+ */
+export async function recoverWalletsFromSeeds(seeds: string[]): Promise<XMRWallet[]> {
+  if (typeof window === 'undefined') {
+    throw new Error('Wallets can only be recovered in browser');
+  }
+
+  if (seeds.length !== 5) {
+    throw new Error('Exactly 5 seeds required');
+  }
+
+  // Validate each seed
+  for (let i = 0; i < seeds.length; i++) {
+    const words = seeds[i].trim().split(/\s+/);
+    if (words.length !== 25) {
+      throw new Error(`Wallet ${i + 1}: Invalid seed (must be 25 words, got ${words.length})`);
+    }
+  }
+
+  const wallets: XMRWallet[] = [];
+  const addresses: string[] = [];
+  const createdAt = Date.now();
+
+  try {
+    console.log('🔄 Recovering 5 wallets from seeds...');
+
+    // Import monero-core functions
+    const { initMoneroLib } = await import('./monero-core');
+    await initMoneroLib();
+    
+    const moneroJs = await import('monero-javascript');
+    const MoneroWalletFull = moneroJs.MoneroWalletFull;
+    const MoneroNetworkType = moneroJs.MoneroNetworkType;
+
+    // Verify each seed and extract addresses
+    for (let i = 0; i < 5; i++) {
+      console.log(`Verifying wallet ${i + 1}/5...`);
+
+      // Create wallet from seed to verify and get address
+      const wallet = await MoneroWalletFull.createWallet({
+        networkType: MoneroNetworkType.MAINNET,
+        mnemonic: seeds[i].trim(),
+        password: '',
+      });
+
+      const address = await wallet.getPrimaryAddress();
+      const publicViewKey = await wallet.getPublicViewKey();
+      const publicSpendKey = await wallet.getPublicSpendKey();
+
+      await wallet.close();
+
+      addresses.push(address);
+
+      wallets.push({
+        id: i,
+        address,
+        balance: '0.000000000000',
+        type: WALLET_TYPES[i],
+        label: WALLET_LABELS[i],
+        publicViewKey,
+        publicSpendKey,
+      });
+    }
+
+    // Encrypt seeds and store
+    const encryptedData: EncryptedWalletData = {
+      encryptedSeeds: encrypt(JSON.stringify(seeds)),
+      walletAddresses: addresses,
+      createdAt,
+    };
+
+    localStorage.setItem(WALLETS_KEY, JSON.stringify(encryptedData));
+    localStorage.setItem('xmr_wallets_public', JSON.stringify(wallets));
+    localStorage.setItem('xmr_wallets_created_at', createdAt.toString());
+
+    console.log('✅ Wallets recovered successfully');
+    console.log('⏳ Syncing balances (this may take 5-15 minutes)...');
+
+    // Trigger background balance sync
+    setTimeout(() => {
+      updateWalletBalances().catch(console.error);
+    }, 1000);
+
+    return wallets;
+
+  } catch (error) {
+    console.error('Failed to recover wallets:', error);
+    throw new Error('Wallet recovery failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+  }
+}
+
+/**
  * Delete all wallets (DANGEROUS!)
  */
 export async function deleteWallets(): Promise<void> {

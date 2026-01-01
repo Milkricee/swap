@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { XMRWallet } from '@/types/wallet';
-import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine, Shield } from 'lucide-react';
+import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine, Shield, Upload } from 'lucide-react';
 import SeedBackupModal from '@/components/SeedBackupModal';
+import WalletRecoveryModal from '@/components/WalletRecoveryModal';
 
 export default function WalletView() {
   const [wallets, setWallets] = useState<XMRWallet[] | null>(null);
@@ -15,6 +16,7 @@ export default function WalletView() {
   const [refreshing, setRefreshing] = useState(false);
   const [consolidating, setConsolidating] = useState(false);
   const [showSeedBackup, setShowSeedBackup] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
 
   useEffect(() => {
@@ -143,13 +145,36 @@ export default function WalletView() {
             Create your secure XMR wallet to start swapping and receiving payments.
           </p>
         </div>
-        <Button
-          onClick={handleCreateWallet}
-          className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 min-h-[48px] px-8"
-        >
-          <Wallet className="w-5 h-5 mr-2" />
-          Create Wallet
-        </Button>
+        
+        <div className="flex gap-3">
+          <Button
+            onClick={handleCreateWallet}
+            className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 min-h-[48px] px-8"
+          >
+            <Wallet className="w-5 h-5 mr-2" />
+            Create Wallet
+          </Button>
+          
+          <Button
+            onClick={() => setShowRecovery(true)}
+            variant="outline"
+            className="border-white/10 text-white hover:bg-white/10 min-h-[48px] px-8"
+          >
+            <Upload className="w-5 h-5 mr-2" />
+            Recover Wallet
+          </Button>
+        </div>
+        
+        {/* Recovery Modal */}
+        {showRecovery && (
+          <WalletRecoveryModal
+            onClose={() => setShowRecovery(false)}
+            onRecovered={() => {
+              setShowRecovery(false);
+              loadWallets();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -344,14 +369,36 @@ export default function WalletView() {
       
       {/* Backup Seeds Button (show if wallets exist but not just created) */}
       {wallets && !justCreated && (
-        <Button
-          onClick={() => setShowSeedBackup(true)}
-          variant="outline"
-          className="w-full border-white/10 text-white hover:bg-white/10 mt-4"
-        >
-          <Shield className="w-4 h-4 mr-2" />
-          View/Backup Wallet Seeds
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => setShowSeedBackup(true)}
+            variant="outline"
+            className="flex-1 border-white/10 text-white hover:bg-white/10"
+          >
+            <Shield className="w-4 h-4 mr-2" />
+            View/Backup Seeds
+          </Button>
+          
+          <Button
+            onClick={() => setShowRecovery(true)}
+            variant="outline"
+            className="flex-1 border-white/10 text-white hover:bg-white/10"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Recover from Seed
+          </Button>
+        </div>
+      )}
+      
+      {/* Recovery Modal */}
+      {showRecovery && (
+        <WalletRecoveryModal
+          onClose={() => setShowRecovery(false)}
+          onRecovered={() => {
+            setShowRecovery(false);
+            loadWallets();
+          }}
+        />
       )}
     </div>
   );
