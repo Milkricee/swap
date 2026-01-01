@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Copy, Check, Download, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { useSessionStore } from '@/lib/storage/session';
+import { PasswordSetup } from '@/components/PasswordSetup';
 
 interface SeedBackupModalProps {
   onClose: () => void;
@@ -16,28 +18,55 @@ export default function SeedBackupModal({ onClose, onConfirmed }: SeedBackupModa
   const [confirmed, setConfirmed] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [needsPassword, setNeedsPassword] = useState(false);
 
-  // Load seeds from localStorage (encrypted)
-  const loadSeeds = async () => {
+  const { password, setPassword } = useSessionStore();
+
+  // Load seeds from localStorage (encrypted with password)
+  const loadSeeds = async (pwd?: string) => {
     setLoading(true);
+    const passwordToUse = pwd || password;
+    
+    if (!passwordToUse) {
+      setNeedsPassword(true);
+      setLoading(false);
+      return;
+    }
+
     try {
       // Import getWalletSeed dynamically
       const { getWalletSeed } = await import('@/lib/wallets/index');
       
       const loadedSeeds: string[] = [];
       for (let i = 0; i < 5; i++) {
-        const seed = await getWalletSeed(i);
+        const seed = await getWalletSeed(i, passwordToUse);
         if (seed) loadedSeeds.push(seed);
+      }
+      
+      if (loadedSeeds.length === 0) {
+        throw new Error('Invalid password or no wallets found');
+      }
+
+      // Store password in session if not already stored
+      if (pwd && !password) {
+        setPassword(pwd);
       }
       
       setSeeds(loadedSeeds);
       setShowSeeds(true);
+      setNeedsPassword(false);
     } catch (error) {
-      console.error('Failed to load seeds:', error);
-      alert('Failed to load wallet seeds');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load seeds:', error);
+      }
+      alert('Failed to load wallet seeds. Check your password.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasswordProvided = (pwd: string) => {
+    loadSeeds(pwd);
   };
 
   const copySeed = async (seed: string, index: number) => {
@@ -46,7 +75,9 @@ export default function SeedBackupModal({ onClose, onConfirmed }: SeedBackupModa
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch (error) {
-      console.error('Failed to copy:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to copy:', error);
+      }
     }
   };
 
@@ -84,21 +115,40 @@ export default function SeedBackupModal({ onClose, onConfirmed }: SeedBackupModa
           </div>
         </div>
 
+        {/* Password Prompt */}
+        {needsPassword && !showSeeds && (
+          <div className="mb-6">
+            <PasswordSetup 
+              onPasswordSet={handlePasswordProvided}
+              isCreating={false}
+            />
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="w-full mt-4 border-white/20 text-white/70 hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+
         {/* Warning */}
-        <div className="backdrop-blur-md bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
-          <h3 className="font-semibold text-red-400 mb-2">⚠️ Security Warning</h3>
-          <ul className="text-sm text-red-300 space-y-1 list-disc list-inside">
-            <li>Never share these seeds with anyone</li>
-            <li>Store them offline in a safe place</li>
-            <li>Anyone with these seeds can steal your XMR</li>
-            <li>No recovery possible if lost</li>
-          </ul>
-        </div>
+        {!needsPassword && (
+          <div className="backdrop-blur-md bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-red-400 mb-2">⚠️ Security Warning</h3>
+            <ul className="text-sm text-red-300 space-y-1 list-disc list-inside">
+              <li>Never share these seeds with anyone</li>
+              <li>Store them offline in a safe place</li>
+              <li>Anyone with these seeds can steal your XMR</li>
+              <li>No recovery possible if lost</li>
+            </ul>
+          </div>
+        )}
 
         {/* Show Seeds Button */}
-        {!showSeeds && (
+        {!showSeeds && !needsPassword && (
           <Button
-            onClick={loadSeeds}
+            onClick={() => loadSeeds()}
             disabled={loading}
             className="w-full bg-[#00d4aa] hover:bg-[#00d4aa]/80 text-black font-semibold h-12 mb-4"
           >

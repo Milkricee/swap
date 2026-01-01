@@ -25,10 +25,15 @@ export interface PaymentStatus {
 /**
  * Execute exact payment to shop
  * Smart Consolidation: If Hot Wallet insufficient → Consolidate from others
+ * @param shopAddress - Monero address of recipient
+ * @param exactAmount - Exact XMR amount to send
+ * @param password - User's master password
+ * @param label - Optional payment label
  */
 export async function executePayment(
   shopAddress: string,
   exactAmount: number,
+  password: string,
   label?: string
 ): Promise<PaymentStatus> {
   try {
@@ -38,6 +43,14 @@ export async function executePayment(
       exactAmount,
       label,
     });
+
+    if (!password) {
+      return {
+        stage: 'error',
+        message: 'Password required',
+        error: 'Password required to access wallet',
+      };
+    }
 
     // Check if wallets exist
     const wallets = await getWallets();
@@ -50,14 +63,14 @@ export async function executePayment(
     }
 
     // Get Hot Wallet balance
-    const hotWalletBalance = await getHotWalletBalance();
+    const hotWalletBalance = await getHotWalletBalance(password);
     
     // Stage 1: Consolidation (if needed)
     if (hotWalletBalance < validated.exactAmount) {
       const deficit = validated.exactAmount - hotWalletBalance;
       
-      // Consolidate from other wallets
-      const consolidationSuccess = await consolidateToHotWallet(validated.exactAmount);
+      // Consolidate from other wallets (needs password)
+      const consolidationSuccess = await consolidateToHotWallet(validated.exactAmount, password);
       
       if (!consolidationSuccess) {
         return {
@@ -68,7 +81,7 @@ export async function executePayment(
       }
 
       // Check if we have enough after consolidation
-      const newHotBalance = await getHotWalletBalance();
+      const newHotBalance = await getHotWalletBalance(password);
       if (newHotBalance < validated.exactAmount) {
         return {
           stage: 'error',
@@ -82,6 +95,7 @@ export async function executePayment(
     const txId = await sendExactPayment(
       validated.shopAddress,
       validated.exactAmount,
+      password,
       validated.label
     );
 
@@ -91,7 +105,9 @@ export async function executePayment(
       txId,
     };
   } catch (error) {
-    console.error('Payment error:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Payment error:', error);
+    }
     return {
       stage: 'error',
       message: 'Payment failed',
@@ -103,10 +119,15 @@ export async function executePayment(
 /**
  * Send exact payment from Hot Wallet (Wallet #3)
  * REAL Implementation with monero-javascript
+ * @param shopAddress - Monero address of recipient
+ * @param exactAmount - Exact XMR amount to send
+ * @param password - User's master password to decrypt seed
+ * @param label - Optional payment label
  */
 async function sendExactPayment(
   shopAddress: string,
   exactAmount: number,
+  password: string,
   label?: string
 ): Promise<string> {
   try {
@@ -115,12 +136,16 @@ async function sendExactPayment(
       throw new Error('Invalid Monero address');
     }
 
-    // Get Hot Wallet seed (id=2)
+    if (!password) {
+      throw new Error('Password required to access wallet');
+    }
+
+    // Get Hot Wallet seed (id=2) with password
     const hotWalletId = 2;
-    const seed = await getWalletSeed(hotWalletId);
+    const seed = await getWalletSeed(hotWalletId, password);
     
     if (!seed) {
-      throw new Error('Hot wallet seed not found');
+      throw new Error('Hot wallet seed not found or invalid password');
     }
 
     // Get wallet creation date for restore height
@@ -135,9 +160,10 @@ async function sendExactPayment(
       restoreHeight,
     };
 
-    console.log(`💸 Sending ${exactAmount} XMR to ${shopAddress}`);
-    console.log(`📝 Label: ${label || 'N/A'}`);
-
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`💸 Sending ${exactAmount} XMR to ${shopAddress}`);
+      console.log(`📝 Label: ${label || 'N/A'}`);
+    }
     // Send transaction using monero-core
     const txHash = await sendMonero(
       seed,
@@ -228,8 +254,13 @@ export function calculateRequiredFunds(exactAmount: number): number {
 
 /**
  * Get payment estimate (consolidation needed, fees, etc.)
+ * @param exactAmount - Amount to send
+ * @param password - User's master password
  */
-export async function getPaymentEstimate(exactAmount: number): Promise<{
+export async function getPaymentEstimate(
+  exactAmount: number,
+  password: string
+): Promise<{
   possible: boolean;
   consolidationNeeded: boolean;
   totalAvailable: number;
@@ -238,7 +269,7 @@ export async function getPaymentEstimate(exactAmount: number): Promise<{
 }> {
   const wallets = await getWallets();
   
-  if (!wallets) {
+  if (!wallets || !password) {
     return {
       possible: false,
       consolidationNeeded: false,
@@ -253,7 +284,7 @@ export async function getPaymentEstimate(exactAmount: number): Promise<{
     0
   );
   
-  const hotWalletBalance = await getHotWalletBalance();
+  const hotWalletBalance = await getHotWalletBalance(password);
   const estimatedFee = 0.0001;
   const requiredTotal = calculateRequiredFunds(exactAmount);
   

@@ -7,6 +7,9 @@ import type { XMRWallet } from '@/types/wallet';
 import { Wallet, Copy, Check, Eye, EyeOff, RefreshCw, ArrowDownToLine, Shield, Upload } from 'lucide-react';
 import SeedBackupModal from '@/components/SeedBackupModal';
 import WalletRecoveryModal from '@/components/WalletRecoveryModal';
+import { PasswordSetup } from '@/components/PasswordSetup';
+import { useSessionStore } from '@/lib/storage/session';
+import { WalletGridSkeleton } from '@/components/Skeleton';
 
 export default function WalletView() {
   const [wallets, setWallets] = useState<XMRWallet[] | null>(null);
@@ -18,6 +21,10 @@ export default function WalletView() {
   const [showSeedBackup, setShowSeedBackup] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+  const [creatingWallets, setCreatingWallets] = useState(false);
+
+  const { password, setPassword, isLocked } = useSessionStore();
 
   useEffect(() => {
     loadWallets();
@@ -36,12 +43,19 @@ export default function WalletView() {
   }
 
   async function handleCreateWallet() {
-    setLoading(true);
+    // Show password setup modal instead of direct creation
+    setShowPasswordSetup(true);
+  }
+
+  async function handlePasswordSet(newPassword: string) {
+    setCreatingWallets(true);
+    setShowPasswordSetup(false);
+    
     try {
       const response = await fetch('/api/wallets/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ password: newPassword }),
       });
       
       const data = await response.json();
@@ -49,6 +63,9 @@ export default function WalletView() {
       if (!response.ok) {
         throw new Error(data.message || data.error || 'Failed to create wallets');
       }
+      
+      // Store password in session (30min auto-lock)
+      setPassword(newPassword);
       
       setWallets(data.wallets);
       setJustCreated(true);
@@ -59,10 +76,12 @@ export default function WalletView() {
       }, 500);
       
     } catch (error) {
-      console.error('Failed to create wallets:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to create wallets:', error);
+      }
       alert('Wallet creation failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
-      setLoading(false);
+      setCreatingWallets(false);
     }
   }
 
@@ -127,10 +146,21 @@ export default function WalletView() {
     }
   }
 
-  if (loading) {
+  // Loading state with Skeleton UI
+  if (loading || creatingWallets) {
     return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <div className="text-white/50">Loading wallet...</div>
+      <div className="space-y-4">
+        <Card className="backdrop-blur-md bg-white/5 border-white/10 p-6">
+          <div className="flex items-center justify-center min-h-[300px]">
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 mx-auto border-4 border-[#00d4aa]/30 border-t-[#00d4aa] rounded-full animate-spin" />
+              <div className="text-white/70">
+                {creatingWallets ? 'Creating wallets...' : 'Loading wallets...'}
+              </div>
+            </div>
+          </div>
+        </Card>
+        {showDetails && <WalletGridSkeleton />}
       </div>
     );
   }
@@ -365,6 +395,25 @@ export default function WalletView() {
             setJustCreated(false);
           }}
         />
+      )}
+      
+      {/* Password Setup Modal */}
+      {showPasswordSetup && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full">
+            <PasswordSetup 
+              onPasswordSet={handlePasswordSet}
+              isCreating={true}
+            />
+            <Button
+              onClick={() => setShowPasswordSetup(false)}
+              variant="outline"
+              className="w-full mt-4 border-white/20 text-white/70 hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       )}
       
       {/* Backup Seeds Button (show if wallets exist but not just created) */}

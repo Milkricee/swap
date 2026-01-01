@@ -5,6 +5,7 @@ import { z } from 'zod';
 // Validation schema
 const RecoveryRequestSchema = z.object({
   seeds: z.array(z.string()).length(5),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 // Rate limiting
@@ -44,8 +45,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Recover wallets
-    const wallets = await recoverWalletsFromSeeds(validated.seeds);
+    // Recover wallets with password
+    const wallets = await recoverWalletsFromSeeds(validated.seeds, validated.password);
 
     return NextResponse.json({ 
       wallets,
@@ -60,7 +61,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error('Recovery error:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Recovery error:', error);
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Recovery failed' },
       { status: 500 }

@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 const EstimateRequestSchema = z.object({
   exactAmount: z.number().positive().max(100),
+  password: z.string().min(8, 'Password required'),
 });
 
 export async function POST(request: NextRequest) {
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = EstimateRequestSchema.parse(body);
 
-    const estimate = await getPaymentEstimate(validated.exactAmount);
+    const estimate = await getPaymentEstimate(validated.exactAmount, validated.password);
 
     return NextResponse.json(estimate, { status: 200 });
   } catch (error) {

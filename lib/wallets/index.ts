@@ -9,6 +9,8 @@ import {
   sendMonero,
   getRestoreHeight,
 } from './monero-core';
+import { encryptWithPassword, decryptWithPassword } from '@/lib/storage/user-encryption';
+import { getCachedBalance, setCachedBalance } from '@/lib/storage/balance-cache';
 
 // Zod Schemas
 const WalletSchema = z.object({
@@ -60,12 +62,17 @@ function decrypt(encryptedData: string): string {
 }
 
 /**
- * Create 5 new XMR wallets with real monero-javascript
- * Seeds are encrypted and stored in localStorage
+ * Create 5 new XMR wallets with user password encryption
+ * @param password - User's master password for PBKDF2 encryption
  */
-export async function createWallets(): Promise<XMRWallet[]> {
+export async function createWallets(password?: string): Promise<XMRWallet[]> {
   if (typeof window === 'undefined') {
     throw new Error('Wallets can only be created in browser');
+  }
+
+  // Password is REQUIRED for secure encryption
+  if (!password) {
+    throw new Error('Password required for wallet encryption');
   }
 
   const wallets: XMRWallet[] = [];
@@ -74,11 +81,15 @@ export async function createWallets(): Promise<XMRWallet[]> {
   const createdAt = Date.now();
 
   try {
-    console.log('🔐 Creating 5 XMR wallets with monero-javascript...');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔐 Creating 5 XMR wallets with monero-javascript...');
+    }
 
     // Create 5 wallets in-memory
     for (let i = 0; i < 5; i++) {
-      console.log(`Creating wallet ${i + 1}/5...`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Creating wallet ${i + 1}/5...`);
+      }
 
       const walletData = await createMoneroWallet();
 
@@ -96,9 +107,11 @@ export async function createWallets(): Promise<XMRWallet[]> {
       });
     }
 
-    // Encrypt seeds and store
+    // Encrypt seeds with user password (PBKDF2, 100k iterations)
+    const encryptedSeeds = await encryptWithPassword(JSON.stringify(seeds), password);
+
     const encryptedData: EncryptedWalletData = {
-      encryptedSeeds: encrypt(JSON.stringify(seeds)),
+      encryptedSeeds,
       walletAddresses: addresses,
       createdAt,
     };
@@ -109,14 +122,16 @@ export async function createWallets(): Promise<XMRWallet[]> {
     localStorage.setItem('xmr_wallets_public', JSON.stringify(wallets));
     localStorage.setItem('xmr_wallets_created_at', createdAt.toString());
 
-    console.log('✅ Created 5 XMR wallets (seeds encrypted in localStorage)');
-    console.log('📝 IMPORTANT: Backup your seeds NOW!');
-    console.log('📋 Use: await window.getWalletSeed(0) in console to view seed');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Created 5 XMR wallets (seeds encrypted with PBKDF2)');
+    }
     
     return wallets;
 
   } catch (error) {
-    console.error('Failed to create wallets:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to create wallets:', error);
+    }
     throw new Error('Wallet creation failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
   }
 }
@@ -141,24 +156,31 @@ export async function getWallets(): Promise<XMRWallet[] | null> {
 }
 
 /**
- * Get decrypted seed for a specific wallet (DANGEROUS - use with care!)
- * Usage: await getWalletSeed(0) in browser console
+ * Get decrypted seed for a specific wallet with password
+ * @param walletId - Wallet index (0-4)
+ * @param password - User's master password
  */
-export async function getWalletSeed(walletId: number): Promise<string | null> {
+export async function getWalletSeed(walletId: number, password: string): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   if (walletId < 0 || walletId > 4) return null;
+  if (!password) return null;
 
   try {
     const encryptedDataStr = localStorage.getItem(WALLETS_KEY);
     if (!encryptedDataStr) return null;
 
     const encryptedData: EncryptedWalletData = JSON.parse(encryptedDataStr);
-    const decryptedSeeds = decrypt(encryptedData.encryptedSeeds);
+    
+    // Decrypt with user password (PBKDF2)
+    const decryptedSeeds = await decryptWithPassword(encryptedData.encryptedSeeds, password);
     const seeds: string[] = JSON.parse(decryptedSeeds);
 
     return seeds[walletId] || null;
   } catch (error) {
-    console.error('Failed to get wallet seed:', error);
+    // Silent failure in production (wrong password)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to get wallet seed:', error);
+    }
     return null;
   }
 }
@@ -166,15 +188,35 @@ export async function getWalletSeed(walletId: number): Promise<string | null> {
 /**
  * Get wallet balance from public Monero node
  * Uses optimized restore height for faster sync
+ * WITH CACHING: Returns cached balance if <5min old
+ * @param walletId - Wallet index (0-4)
+ * @param password - User's master password to decrypt seed
+ * @param forceRefresh - Skip cache and force blockchain sync
  */
-export async function getWalletBalance(walletId: number): Promise<string> {
+export async function getWalletBalance(
+  walletId: number,
+  password: string,
+  forceRefresh = false
+): Promise<string> {
   if (typeof window === 'undefined') return '0.000000000000';
+  if (!password) return '0.000000000000';
 
   try {
     const wallets = await getWallets();
     if (!wallets || !wallets[walletId]) return '0.000000000000';
 
-    const seed = await getWalletSeed(walletId);
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = await getCachedBalance(walletId);
+      if (cached) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`💾 Using cached balance for wallet ${walletId}: ${cached} XMR`);
+        }
+        return cached;
+      }
+    }
+
+    const seed = await getWalletSeed(walletId, password);
     if (!seed) return '0.000000000000';
 
     // Get wallet creation date for restore height optimization
@@ -191,16 +233,25 @@ export async function getWalletBalance(walletId: number): Promise<string> {
       restoreHeight,
     };
 
-    console.log(`🔍 Fetching balance for wallet ${walletId} (restore height: ${restoreHeight})...`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔍 Fetching balance for wallet ${walletId} (restore height: ${restoreHeight})...`);
+    }
 
     const balance = await getMoneroBalance(seed, config);
 
-    console.log(`Wallet ${walletId}: ${balance} XMR`);
+    // Cache the result
+    await setCachedBalance(walletId, balance, wallets[walletId].address);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Wallet ${walletId}: ${balance} XMR (cached)`);
+    }
 
     return balance;
 
   } catch (error) {
-    console.error(`Failed to get balance for wallet ${walletId}:`, error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`Failed to get balance for wallet ${walletId}:`, error);
+    }
     return '0.000000000000';
   }
 }
@@ -208,17 +259,25 @@ export async function getWalletBalance(walletId: number): Promise<string> {
 /**
  * Update all wallet balances
  */
-export async function updateWalletBalances(): Promise<XMRWallet[]> {
+/**
+ * Update all wallet balances from blockchain
+ * @param password - User's master password to decrypt seeds
+ */
+export async function updateWalletBalances(password: string): Promise<XMRWallet[]> {
   const wallets = await getWallets();
-  if (!wallets) throw new Error('No wallets found');
+  if (!wallets || !password) throw new Error('No wallets found or password required');
 
-  console.log('🔄 Updating wallet balances (this may take a while)...');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 Updating wallet balances (this may take a while)...');
+  }
 
   // Update balances sequentially to avoid overwhelming the remote node
   const updatedWallets: XMRWallet[] = [];
   for (const wallet of wallets) {
-    const balance = await getWalletBalance(wallet.id);
-    console.log(`Wallet ${wallet.id}: ${balance} XMR`);
+    const balance = await getWalletBalance(wallet.id, password);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Wallet ${wallet.id}: ${balance} XMR`);
+    }
     updatedWallets.push({ ...wallet, balance });
   }
 
@@ -227,7 +286,9 @@ export async function updateWalletBalances(): Promise<XMRWallet[]> {
     localStorage.setItem('xmr_wallets_public', JSON.stringify(updatedWallets));
   }
 
-  console.log('✅ Balances updated');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('✅ Balances updated');
+  }
   return updatedWallets;
 }
 
@@ -243,21 +304,33 @@ export async function getTotalBalance(): Promise<number> {
 
 /**
  * Get Hot Wallet (id=2) balance
+ * @param password - User's master password
  */
-export async function getHotWalletBalance(): Promise<number> {
+export async function getHotWalletBalance(password: string): Promise<number> {
   const wallets = await getWallets();
-  if (!wallets) return 0;
+  if (!wallets || !password) return 0;
 
   const hotWallet = wallets.find(w => w.id === 2);
-  return hotWallet ? parseFloat(hotWallet.balance) : 0;
+  if (!hotWallet) return 0;
+
+  // Get live balance from blockchain
+  try {
+    const liveBalance = await getWalletBalance(2, password);
+    return parseFloat(liveBalance);
+  } catch (error) {
+    // Fallback to cached balance
+    return parseFloat(hotWallet.balance);
+  }
 }
 
 /**
  * Consolidate wallets: Transfer from cold wallets to hot wallet
  * This requires spending transactions - COMPLEX operation
+ * @param targetAmount - Amount needed in hot wallet
+ * @param password - User's master password to decrypt seeds
  */
-export async function consolidateToHotWallet(targetAmount: number): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+export async function consolidateToHotWallet(targetAmount: number, password: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !password) return false;
 
   try {
     const wallets = await getWallets();
@@ -268,13 +341,16 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
     const hotBalance = parseFloat(hotWallet.balance);
 
     if (hotBalance >= targetAmount) {
-      console.log('✅ Hot wallet already has sufficient balance');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Hot wallet already has sufficient balance');
+      }
       return true;
     }
 
     const needed = targetAmount - hotBalance;
-    console.log(`Need to consolidate ${needed} XMR to hot wallet`);
-
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Need to consolidate ${needed} XMR to hot wallet`);
+    }
     // Collect from other wallets (0,1,3,4)
     const sourceWalletIds = [0, 1, 3, 4];
     
@@ -295,10 +371,12 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
       const sourceBalance = parseFloat(sourceWallet.balance);
 
       if (sourceBalance > 0.001) { // Minimum 0.001 XMR to transfer (avoid dust)
-        console.log(`Transferring from wallet ${sourceId}: ${sourceBalance} XMR`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Transferring from wallet ${sourceId}: ${sourceBalance} XMR`);
+        }
 
-        // Get wallet seed
-        const seed = await getWalletSeed(sourceId);
+        // Get wallet seed with password
+        const seed = await getWalletSeed(sourceId, password);
         if (!seed) continue;
 
         try {
@@ -306,25 +384,31 @@ export async function consolidateToHotWallet(targetAmount: number): Promise<bool
           const amountToSend = Math.min(sourceBalance - 0.0001, needed);
           const txHash = await sendMonero(seed, hotWallet.address, amountToSend, config);
 
-          console.log(`✅ Sent ${amountToSend} XMR from wallet ${sourceId} to hot wallet`);
-          console.log(`TX Hash: ${txHash}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✅ Sent ${amountToSend} XMR from wallet ${sourceId} to hot wallet`);
+            console.log(`TX Hash: ${txHash}`);
+          }
 
           // Check if we have enough now
           if (amountToSend >= needed) break;
         } catch (error) {
-          console.error(`Failed to send from wallet ${sourceId}:`, error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`Failed to send from wallet ${sourceId}:`, error);
+          }
           continue;
         }
       }
     }
 
     // Refresh balances
-    await updateWalletBalances();
+    await updateWalletBalances(password);
 
     return true;
 
   } catch (error) {
-    console.error('Consolidation failed:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Consolidation failed:', error);
+    }
     return false;
   }
 }
@@ -364,10 +448,15 @@ export async function distributeToWallets(totalAmount: number): Promise<boolean>
 /**
  * Recover wallets from 25-word seeds
  * @param seeds - Array of 5 mnemonic seeds (in order: Wallet 1-5)
+ * @param password - User's master password for encryption
  */
-export async function recoverWalletsFromSeeds(seeds: string[]): Promise<XMRWallet[]> {
+export async function recoverWalletsFromSeeds(seeds: string[], password: string): Promise<XMRWallet[]> {
   if (typeof window === 'undefined') {
     throw new Error('Wallets can only be recovered in browser');
+  }
+
+  if (!password || password.length < 8) {
+    throw new Error('Password required (min 8 characters)');
   }
 
   if (seeds.length !== 5) {
@@ -431,9 +520,11 @@ export async function recoverWalletsFromSeeds(seeds: string[]): Promise<XMRWalle
       });
     }
 
-    // Encrypt seeds and store
+    // Encrypt seeds with user password (PBKDF2)
+    const encryptedSeeds = await encryptWithPassword(JSON.stringify(seeds), password);
+
     const encryptedData: EncryptedWalletData = {
-      encryptedSeeds: encrypt(JSON.stringify(seeds)),
+      encryptedSeeds,
       walletAddresses: addresses,
       createdAt,
     };
@@ -442,18 +533,26 @@ export async function recoverWalletsFromSeeds(seeds: string[]): Promise<XMRWalle
     localStorage.setItem('xmr_wallets_public', JSON.stringify(wallets));
     localStorage.setItem('xmr_wallets_created_at', createdAt.toString());
 
-    console.log('✅ Wallets recovered successfully');
-    console.log('⏳ Syncing balances (this may take 5-15 minutes)...');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Wallets recovered successfully');
+      console.log('⏳ Syncing balances (this may take 5-15 minutes)...');
+    }
 
     // Trigger background balance sync
     setTimeout(() => {
-      updateWalletBalances().catch(console.error);
+      updateWalletBalances(password).catch((err) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.error(err);
+        }
+      });
     }, 1000);
 
     return wallets;
 
   } catch (error) {
-    console.error('Failed to recover wallets:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to recover wallets:', error);
+    }
     throw new Error('Wallet recovery failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
   }
 }

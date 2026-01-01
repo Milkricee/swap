@@ -108,8 +108,8 @@ export async function createPasswordTest(password: string): Promise<string> {
 /**
  * Encrypt data with user password
  */
-export async function encryptWithPassword<T>(
-  data: T,
+export async function encryptWithPassword(
+  data: string,
   password: string
 ): Promise<string> {
   const salt = getSalt();
@@ -118,31 +118,30 @@ export async function encryptWithPassword<T>(
   const { key } = await deriveKeyFromPassword(password, salt);
 
   const CryptoJS = (await import('crypto-js')).default;
-  return CryptoJS.AES.encrypt(JSON.stringify(data), key).toString();
+  return CryptoJS.AES.encrypt(data, key).toString();
 }
 
 /**
  * Decrypt data with user password
  */
-export async function decryptWithPassword<T>(
+export async function decryptWithPassword(
   encrypted: string,
   password: string
-): Promise<T | null> {
-  try {
-    const salt = getSalt();
-    if (!salt) throw new Error('No salt found');
+): Promise<string> {
+  const salt = getSalt();
+  if (!salt) throw new Error('No salt found');
 
-    const { key } = await deriveKeyFromPassword(password, salt);
+  const { key } = await deriveKeyFromPassword(password, salt);
 
-    const CryptoJS = (await import('crypto-js')).default;
-    const decrypted = CryptoJS.AES.decrypt(encrypted, key);
-    const text = decrypted.toString(CryptoJS.enc.Utf8);
+  const CryptoJS = (await import('crypto-js')).default;
+  const decrypted = CryptoJS.AES.decrypt(encrypted, key);
+  const text = decrypted.toString(CryptoJS.enc.Utf8);
 
-    return JSON.parse(text) as T;
-  } catch (error) {
-    console.error('Decryption failed:', error);
-    return null;
+  if (!text) {
+    throw new Error('Decryption failed - invalid password');
   }
+
+  return text;
 }
 
 /**

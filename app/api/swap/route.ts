@@ -11,8 +11,8 @@ const SwapRequestSchema = z.object({
 
 // Rate limiting
 const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT = 10; // max 10 requests
-const RATE_WINDOW = 60000; // per 60 seconds
+const RATE_LIMIT = 20; // max 20 swap quotes
+const RATE_WINDOW = 3600000; // per 60 minutes (1 hour)
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,3 +1,9 @@
+import withBundleAnalyzer from '@next/bundle-analyzer';
+
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -121,4 +127,5 @@ const nextConfig = {
   serverExternalPackages: ['monero-javascript'],
 };
 
-export default nextConfig;
+// Export with bundle analyzer wrapper
+export default bundleAnalyzer(nextConfig);

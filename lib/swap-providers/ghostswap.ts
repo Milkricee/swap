@@ -42,7 +42,9 @@ export async function getGhostSwapQuote(
   toCoin: string,
   amount: number
 ): Promise<GhostSwapQuote> {
-  console.warn('⚠️ GhostSwap API unavailable - using mock quote');
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('⚠️ GhostSwap API unavailable - using mock quote');
+  }
   
   // Check if API is reachable
   try {
@@ -57,10 +59,14 @@ export async function getGhostSwapQuote(
     
     if (response.ok) {
       // If API is back online, implement real call here
-      console.log('✅ GhostSwap API is online!');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ GhostSwap API is online!');
+      }
     }
   } catch (error) {
-    console.error('GhostSwap API check failed:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('GhostSwap API check failed:', error);
+    }
   }
   
   // Mock fallback
@@ -88,7 +94,9 @@ export async function createGhostSwapOrder(
   amount: number,
   xmrAddress: string
 ): Promise<GhostSwapOrder> {
-  console.warn('⚠️ GhostSwap API unavailable - returning mock order');
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('⚠️ GhostSwap API unavailable - returning mock order');
+  }
   
   return {
     orderId: `ghost_mock_${Date.now()}`,

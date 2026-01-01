@@ -5,13 +5,14 @@ import { z } from 'zod';
 const PaymentRequestSchema = z.object({
   shopAddress: z.string().min(95).max(106),
   exactAmount: z.number().positive().max(100),
+  password: z.string().min(8, 'Password required'),
   label: z.string().optional(),
 });
 
 // Rate limiting
 const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT = 5; // max 5 payments
-const RATE_WINDOW = 60000; // per 60 seconds
+const RATE_LIMIT = 10; // max 10 payments
+const RATE_WINDOW = 3600000; // per 60 minutes (1 hour)
 
 /**
  * POST /api/pay
@@ -43,12 +44,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = PaymentRequestSchema.parse(body);
 
-    // Execute payment with smart consolidation (+1% buffer for fees)
-    const amountWithBuffer = validated.exactAmount * 1.01;
-    
+    // Execute payment with smart consolidation
     const status = await executePayment(
       validated.shopAddress,
       validated.exactAmount,
+      validated.password,
       validated.label
     );
 

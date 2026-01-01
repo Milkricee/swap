@@ -60,7 +60,10 @@ export async function executeSwap(
     xmrAddress,
   });
 
-  console.log(`🔄 Executing swap: ${amount} ${fromCoin} → ${toCoin} via ${provider}`);
+  // Silent execution in production
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`🔄 Executing swap: ${amount} ${fromCoin} → ${toCoin} via ${provider}`);
+  }
 
   switch (validated.provider) {
     case 'BTCSwapXMR': {

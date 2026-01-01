@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 const ConsolidateSchema = z.object({
   targetAmount: z.number().positive(),
+  password: z.string().min(8, 'Password required'),
 });
 
 // Rate limiting
@@ -30,10 +31,10 @@ export async function POST(request: NextRequest) {
 
     // Validate request
     const body = await request.json();
-    const { targetAmount } = ConsolidateSchema.parse(body);
+    const { targetAmount, password } = ConsolidateSchema.parse(body);
 
-    // Consolidate wallets
-    const result = await consolidateToHotWallet(targetAmount);
+    // Consolidate wallets with password
+    const result = await consolidateToHotWallet(targetAmount, password);
     
     // Get updated wallets
     const wallets = await getWallets();

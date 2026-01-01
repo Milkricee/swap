@@ -70,7 +70,9 @@ export async function getBestRoute(
       amount,
     });
 
-    console.log(`🔍 Querying swap providers for ${amount} ${fromCoin} → ${toCoin}...`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔍 Querying swap providers for ${amount} ${fromCoin} → ${toCoin}...`);
+    }
 
     // Query providers in parallel based on supported pairs
     const routePromises: Promise<SwapRoute | null>[] = [];
@@ -97,7 +99,9 @@ export async function getBestRoute(
 
     if (fromCoin === 'SOL') {
       // SOL requires 2-step: SOL → USDC → XMR (not implemented yet)
-      console.warn('⚠️ SOL swaps not yet implemented');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ SOL swaps not yet implemented');
+      }
     }
 
     const routes = await Promise.allSettled(routePromises);
@@ -109,7 +113,7 @@ export async function getBestRoute(
       .filter((r) => r !== null);
 
     if (validRoutes.length === 0) {
-      console.error('❌ No valid swap routes found');
+      // Return null silently in production
       return null;
     }
 
@@ -117,11 +121,17 @@ export async function getBestRoute(
     validRoutes.sort((a, b) => parseFloat(b.toAmount) - parseFloat(a.toAmount));
 
     const bestRoute = validRoutes[0];
-    console.log(`✅ Best route: ${bestRoute.provider} - ${bestRoute.toAmount} XMR (fee: ${bestRoute.fee})`);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ Best route: ${bestRoute.provider} - ${bestRoute.toAmount} XMR (fee: ${bestRoute.fee})`);
+    }
 
     return bestRoute;
   } catch (error) {
-    console.error('Get best route error:', error);
+    // Silent error handling in production
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Get best route error:', error);
+    }
     return null;
   }
 }
