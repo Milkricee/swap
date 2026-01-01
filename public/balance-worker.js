@@ -5,27 +5,29 @@
  * - Sends progress updates to main thread
  */
 
-// Types for messaging
-interface SyncRequest {
-  type: 'SYNC_BALANCE';
-  walletId: number;
-  seed: string;
-  address: string;
-  restoreHeight: number;
-  rpcUrl: string;
-  networkType: string;
-}
+// Message types (JSDoc instead of TypeScript interfaces)
+/**
+ * @typedef {Object} SyncRequest
+ * @property {'SYNC_BALANCE'} type
+ * @property {number} walletId
+ * @property {string} seed
+ * @property {string} address
+ * @property {number} restoreHeight
+ * @property {string} rpcUrl
+ * @property {string} networkType
+ */
 
-interface SyncResponse {
-  type: 'SYNC_PROGRESS' | 'SYNC_COMPLETE' | 'SYNC_ERROR';
-  walletId: number;
-  balance?: string;
-  progress?: number;
-  error?: string;
-}
+/**
+ * @typedef {Object} SyncResponse
+ * @property {'SYNC_PROGRESS'|'SYNC_COMPLETE'|'SYNC_ERROR'} type
+ * @property {number} walletId
+ * @property {string} [balance]
+ * @property {number} [progress]
+ * @property {string} [error]
+ */
 
 // Listen for messages from main thread
-self.onmessage = async (event: MessageEvent<SyncRequest>) => {
+self.onmessage = async (event) => {
   const { type, walletId, seed, address, restoreHeight, rpcUrl, networkType } = event.data;
 
   if (type !== 'SYNC_BALANCE') {
@@ -38,7 +40,7 @@ self.onmessage = async (event: MessageEvent<SyncRequest>) => {
       type: 'SYNC_PROGRESS',
       walletId,
       progress: 10,
-    } as SyncResponse);
+    });
 
     // Import monero-javascript in worker context
     // NOTE: This requires special webpack config for web workers
@@ -52,32 +54,32 @@ self.onmessage = async (event: MessageEvent<SyncRequest>) => {
       type: 'SYNC_PROGRESS',
       walletId,
       progress: 90,
-    } as SyncResponse);
+    });
 
     // Send completion
     self.postMessage({
       type: 'SYNC_COMPLETE',
       walletId,
       balance,
-    } as SyncResponse);
+    });
 
   } catch (error) {
     self.postMessage({
       type: 'SYNC_ERROR',
       walletId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    } as SyncResponse);
+    });
   }
 };
 
 /**
  * Fetch balance directly via Monero RPC (lightweight alternative)
  * Uses get_balance RPC method with view key
+ * @param {string} address - Monero address
+ * @param {string} rpcUrl - RPC node URL
+ * @returns {Promise<string>} Balance in XMR
  */
-async function fetchBalanceViaRPC(
-  address: string,
-  rpcUrl: string
-): Promise<string> {
+async function fetchBalanceViaRPC(address, rpcUrl) {
   try {
     // Note: This is a simplified approach
     // Full implementation would require view key + wallet sync
