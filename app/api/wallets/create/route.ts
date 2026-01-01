@@ -64,22 +64,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-    return NextResponse.json({ wallets }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid request', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Create wallets error:', error);
-    }
-    return NextResponse.json(
-      { error: 'Failed to create wallets', message: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
-  }
-}
