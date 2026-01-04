@@ -9,6 +9,29 @@
 const monerojs = eval('require')('monero-javascript');
 const { MoneroWalletFull, MoneroNetworkType } = monerojs;
 
+/**
+ * Get Monero Network Type from environment
+ * Defaults to STAGENET in testnet mode, MAINNET in production
+ */
+function getNetworkType(): typeof MoneroNetworkType.MAINNET {
+  const isTestnet = process.env.NEXT_PUBLIC_TESTNET === 'true';
+  const networkConfig = process.env.NEXT_PUBLIC_MONERO_NETWORK?.toLowerCase();
+  
+  if (isTestnet || networkConfig === 'stagenet') {
+    return MoneroNetworkType.STAGENET;
+  } else if (networkConfig === 'testnet') {
+    return MoneroNetworkType.TESTNET;
+  }
+  return MoneroNetworkType.MAINNET;
+}
+
+/**
+ * Get RPC URL from environment
+ */
+function getRpcUrl(): string {
+  return process.env.NEXT_PUBLIC_MONERO_RPC_URL || 'http://stagenet.community.rino.io:38081';
+}
+
 export interface MoneroWalletConfig {
   rpcUrl: string;
   networkType: 'mainnet' | 'testnet' | 'stagenet';
@@ -27,8 +50,10 @@ export interface WalletCreationResult {
  * Returns address, mnemonic, and public keys
  */
 export async function createMoneroWallet(): Promise<WalletCreationResult> {
+  const networkType = getNetworkType();
+  
   const wallet = await MoneroWalletFull.createWallet({
-    networkType: MoneroNetworkType.MAINNET,
+    networkType,
     password: '', // Empty password for in-memory wallet
   });
 
@@ -57,20 +82,25 @@ export async function createMoneroWallet(): Promise<WalletCreationResult> {
  */
 export async function getMoneroBalance(
   mnemonic: string,
-  config: MoneroWalletConfig
+  config?: MoneroWalletConfig
 ): Promise<string> {
 
-  const networkType = config.networkType === 'mainnet' 
-    ? MoneroNetworkType.MAINNET 
-    : config.networkType === 'testnet'
-    ? MoneroNetworkType.TESTNET
-    : MoneroNetworkType.STAGENET;
+  // Use ENV network type if config not provided
+  const networkType = config?.networkType 
+    ? (config.networkType === 'mainnet' 
+        ? MoneroNetworkType.MAINNET 
+        : config.networkType === 'testnet'
+        ? MoneroNetworkType.TESTNET
+        : MoneroNetworkType.STAGENET)
+    : getNetworkType();
+
+  const rpcUrl = config?.rpcUrl || getRpcUrl();
 
   const wallet = await MoneroWalletFull.createWallet({
     networkType,
     mnemonic,
-    restoreHeight: config.restoreHeight || 0,
-    serverUri: config.rpcUrl,
+    restoreHeight: config?.restoreHeight || 0,
+    serverUri: rpcUrl,
     password: '',
   });
 

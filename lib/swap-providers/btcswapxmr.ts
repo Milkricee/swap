@@ -1,7 +1,8 @@
 /**
  * BTCSwapXMR Provider
  * 
- * Official Tor API: http://btcswapxmr.onion/api
+ * Production Tor API: http://btcswapxmr.onion/api
+ * Testnet API: https://testnet.btcswapxmr.com
  * HTTP Proxy: Using clearnet proxy for dev (Tor in production recommended)
  * 
  * Docs: https://github.com/BTC-Swap-XMR/api-docs
@@ -10,7 +11,16 @@
 
 import { z } from 'zod';
 
-const BTCSWAPXMR_API = process.env.NEXT_PUBLIC_BTCSWAPXMR_API || 'https://api.btcswapxmr.com';
+// Use Testnet URL if enabled
+const IS_TESTNET = process.env.BTCSWAPXMR_TESTNET === 'true' || process.env.NEXT_PUBLIC_TESTNET === 'true';
+const BTCSWAPXMR_API = IS_TESTNET
+  ? (process.env.NEXT_PUBLIC_BTCSWAPXMR_TESTNET_URL || 'https://testnet.btcswapxmr.com')
+  : (process.env.NEXT_PUBLIC_BTCSWAPXMR_API || 'https://api.btcswapxmr.com');
+
+// Log mode (server-side only)
+if (typeof window === 'undefined') {
+  console.log(`[btcswapxmr] Mode: ${IS_TESTNET ? 'TESTNET (Bitcoin Testnet)' : 'PRODUCTION (Mainnet)'}`);
+}
 
 // Zod Schemas
 const CreateSwapResponseSchema = z.object({

@@ -1,7 +1,8 @@
 /**
  * ChangeNOW Provider
  * 
- * Official API: https://api.changenow.io/v2
+ * Production API: https://api.changenow.io/v2
+ * Sandbox API: https://api.sandbox.changenow.io/v2
  * Docs: https://documenter.getpostman.com/view/8180765/SVfTPnME
  * 
  * Supports: ETH, USDC, LTC → XMR
@@ -11,8 +12,18 @@
 
 import { z } from 'zod';
 
-const CHANGENOW_API = 'https://api.changenow.io/v2';
-const CHANGENOW_API_KEY = process.env.NEXT_PUBLIC_CHANGENOW_API_KEY || '';
+// Use Sandbox URL if testnet mode enabled
+const IS_TESTNET = process.env.NEXT_PUBLIC_TESTNET === 'true';
+const CHANGENOW_SANDBOX = process.env.CHANGENOW_SANDBOX === 'true';
+const CHANGENOW_API = (IS_TESTNET || CHANGENOW_SANDBOX)
+  ? (process.env.NEXT_PUBLIC_CHANGENOW_SANDBOX_URL || 'https://api.sandbox.changenow.io/v2')
+  : 'https://api.changenow.io/v2';
+
+const CHANGENOW_API_KEY = process.env.CHANGENOW_API_KEY || '';
+
+// Log which mode we're using (server-side only)
+if (typeof window === 'undefined') {
+  console.log(`[ChangeNOW] Mode: ${IS_TESTNET || CHANGENOW_SANDBOX ? 'SANDBOX (Testnet)' : 'PRODUCTION'}`);
 
 // Zod Schemas
 const ExchangeRangeSchema = z.object({
