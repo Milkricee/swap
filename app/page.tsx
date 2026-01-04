@@ -5,9 +5,12 @@ import SwapCard from "@/components/SwapCard";
 import WalletView from "@/components/WalletView";
 import PaymentForm from "@/components/PaymentForm";
 import TransactionHistory from "@/components/TransactionHistory";
+import AddressBookManager from "@/components/AddressBookManager";
 
 export default function Home() {
   const [toCoin, setToCoin] = useState('XMR');
+  const [showAddressBook, setShowAddressBook] = useState(false);
+
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
       {/* Header */}
@@ -17,6 +20,21 @@ export default function Home() {
             <h1 className="text-3xl md:text-4xl font-bold text-[#00d4aa]">XMR Swap</h1>
             <p className="text-sm text-white/50">Privacy-first Monero exchange</p>
           </div>
+
+          {/* Address Book Toggle */}
+          <button
+            onClick={() => setShowAddressBook(!showAddressBook)}
+            className={`px-4 py-2 rounded-lg border transition-all duration-200 ${
+              showAddressBook
+                ? 'bg-[#00d4aa]/20 border-[#00d4aa] text-[#00d4aa]'
+                : 'bg-white/5 border-white/10 text-white hover:border-white/20'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span>📖</span>
+              <span className="hidden sm:inline">Address Book</span>
+            </span>
+          </button>
         </div>
       </header>
 
@@ -41,6 +59,13 @@ export default function Home() {
         <section id="payment-section">
           <PaymentForm />
         </section>
+
+        {/* Address Book Section - Toggleable */}
+        {showAddressBook && (
+          <section id="addressbook-section">
+            <AddressBookManager />
+          </section>
+        )}
 
         {/* Transaction History Section - Full Width */}
         <section id="history-section">

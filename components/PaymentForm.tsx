@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import AddressBookPicker from '@/components/AddressBookPicker';
+import { addAddressBookEntry, markAddressUsed, findEntryByAddress } from '@/lib/storage/address-book';
+import type { AddressBookEntry } from '@/types/address-book';
 
 interface PaymentStatus {
   stage: 'idle' | 'consolidating' | 'paying' | 'completed' | 'error';
@@ -15,8 +18,19 @@ interface PaymentStatus {
 export default function PaymentForm() {
   const [shopAddress, setShopAddress] = useState('');
   const [exactAmount, setExactAmount] = useState('');
+  const [label, setLabel] = useState('');
   const [status, setStatus] = useState<PaymentStatus>({ stage: 'idle', message: '' });
   const [loading, setLoading] = useState(false);
+  const [useManualInput, setUseManualInput] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<AddressBookEntry | null>(null);
+  const [saveToAddressBook, setSaveToAddressBook] = useState(false);
+
+  const handleAddressSelect = (entry: AddressBookEntry) => {
+    setShopAddress(entry.address);
+    setLabel(entry.label);
+    setSelectedEntry(entry);
+    setSaveToAddressBook(false); // Already in address book
+  };
 
   const handleSmartPay = async () => {
     if (!shopAddress || !exactAmount) {
@@ -42,13 +56,29 @@ export default function PaymentForm() {
     setStatus({ stage: 'consolidating', message: 'Checking wallets...' });
 
     try {
+      // Save to address book if requested
+      if (saveToAddressBook && label) {
+        const existing = findEntryByAddress(shopAddress);
+        if (!existing) {
+          const result = addAddressBookEntry(label, shopAddress);
+          if (!result.success) {
+            console.warn('Failed to save to address book:', result.error);
+          }
+        }
+      }
+
+      // Mark as used if from address book
+      if (selectedEntry) {
+        markAddressUsed(selectedEntry.id);
+      }
+
       const response = await fetch('/api/pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shopAddress,
           exactAmount: amount,
-          label: 'Shop Payment',
+          label: label || 'Payment',
         }),
       });
 
@@ -79,6 +109,9 @@ export default function PaymentForm() {
       setTimeout(() => {
         setShopAddress('');
         setExactAmount('');
+        setLabel('');
+        setSelectedEntry(null);
+        setSaveToAddressBook(false);
         setStatus({ stage: 'idle', message: '' });
       }, 5000);
     } catch (error) {
@@ -132,16 +165,69 @@ export default function PaymentForm() {
       <div className="space-y-4">
         {/* Shop Address Input */}
         <div>
-          <label className="text-sm text-white/50 mb-2 block">Shop Address</label>
-          <Input
-            type="text"
-            value={shopAddress}
-            onChange={(e) => setShopAddress(e.target.value)}
-            placeholder="4Adk..."
-            className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
-            disabled={loading}
-          />
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm text-white/50">Recipient Address</label>
+            <button
+              onClick={() => {
+                setUseManualInput(!useManualInput);
+                setShopAddress('');
+                setSelectedEntry(null);
+              }}
+              className="text-xs text-[#00d4aa] hover:underline"
+              type="button"
+            >
+              {useManualInput ? '📋 Use Address Book' : '✏️ Enter Manually'}
+            </button>
+          </div>
+
+          {useManualInput ? (
+            <Input
+              type="text"
+              value={shopAddress}
+              onChange={(e) => {
+                setShopAddress(e.target.value);
+                setSelectedEntry(null);
+              }}
+              placeholder="4Adk... (95-106 characters)"
+              className="bg-white/5 border-white/10 text-white placeholder:text-white/30 font-mono text-xs"
+              disabled={loading}
+            />
+          ) : (
+            <AddressBookPicker
+              onSelect={handleAddressSelect}
+              selectedAddress={shopAddress}
+              disabled={loading}
+            />
+          )}
         </div>
+
+        {/* Label Input (for saving to address book) */}
+        {useManualInput && shopAddress && !findEntryByAddress(shopAddress) && (
+          <div className="flex items-start gap-2 p-3 bg-[#00d4aa]/5 border border-[#00d4aa]/20 rounded-lg">
+            <input
+              type="checkbox"
+              checked={saveToAddressBook}
+              onChange={(e) => setSaveToAddressBook(e.target.checked)}
+              className="mt-1"
+              id="save-recipient"
+            />
+            <div className="flex-1">
+              <label htmlFor="save-recipient" className="text-sm text-white cursor-pointer">
+                Save recipient to address book
+              </label>
+              {saveToAddressBook && (
+                <Input
+                  type="text"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="Label (e.g., Coffee Shop)"
+                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30 mt-2"
+                  maxLength={50}
+                />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Exact Amount Input */}
         <div>
