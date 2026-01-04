@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { getSwapHistory, type SwapOrder } from '@/lib/swap-providers/execute';
 import { getPaymentHistory, type PaymentRecord, clearPaymentHistory } from '@/lib/payment/history';
 import { clearSwapHistory } from '@/lib/swap-providers/execute';
+import { useTxMonitor } from '@/lib/hooks/useTxMonitor';
 import TransactionRow from './TransactionRow';
 import { Skeleton } from './Skeleton';
 
@@ -32,6 +33,16 @@ export default function TransactionHistory() {
   useEffect(() => {
     loadTransactions();
   }, []);
+
+  // Auto-monitor pending payments (checks every 60s)
+  const monitor = useTxMonitor({
+    enabled: true,
+    interval: 60_000, // 60 seconds
+    onUpdate: () => {
+      // Reload transactions when status updates
+      loadTransactions();
+    },
+  });
 
   const filteredTransactions = transactions.filter(tx => {
     if (filter === 'all') return true;
@@ -107,6 +118,26 @@ export default function TransactionHistory() {
           Transaction History ({filteredTransactions.length})
         </h2>
         <div className="flex gap-2">
+          {/* TX Monitor Status */}
+          <button
+            onClick={monitor.refresh}
+            disabled={monitor.isMonitoring}
+            className="px-3 py-1.5 text-sm bg-[#00d4aa]/10 hover:bg-[#00d4aa]/20 text-[#00d4aa] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
+            title={monitor.lastCheck ? `Last check: ${monitor.lastCheck.toLocaleTimeString()}` : 'Check TX status'}
+          >
+            {monitor.isMonitoring ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-[#00d4aa] border-t-transparent rounded-full animate-spin" />
+                Checking...
+              </>
+            ) : (
+              <>
+                <span>🔄</span>
+                Check Status
+              </>
+            )}
+          </button>
+          
           <button
             onClick={handleExportCSV}
             disabled={transactions.length === 0}
@@ -123,6 +154,25 @@ export default function TransactionHistory() {
           </button>
         </div>
       </div>
+
+      {/* Monitor Info */}
+      {monitor.pendingCount > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm">
+          <div className="flex items-center gap-2 text-amber-400">
+            <span>⏳</span>
+            <span>
+              {monitor.pendingCount} payment{monitor.pendingCount > 1 ? 's' : ''} pending confirmation
+              {monitor.lastCheck && ` • Last checked ${monitor.lastCheck.toLocaleTimeString()}`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {monitor.error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
+          ⚠️ Monitor error: {monitor.error}
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex gap-2 bg-white/5 p-1 rounded-lg">

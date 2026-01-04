@@ -101,6 +101,63 @@ export function updatePaymentStatus(
 }
 
 /**
+ * Bulk update payment statuses
+ * Used by TX monitor to update multiple payments at once
+ */
+export function bulkUpdatePaymentStatus(
+  updates: Array<{
+    id: string;
+    status: PaymentRecord['status'];
+    txHash?: string;
+  }>
+): { updated: number; failed: number } {
+  if (typeof window === 'undefined') {
+    return { updated: 0, failed: 0 };
+  }
+
+  let updated = 0;
+  let failed = 0;
+
+  try {
+    const history = getPaymentHistory();
+    
+    updates.forEach(update => {
+      const index = history.findIndex(p => p.id === update.id);
+      
+      if (index !== -1) {
+        // Validate status transition
+        const currentStatus = history[index].status;
+        
+        // Don't allow reverting from confirmed to pending
+        if (currentStatus === 'confirmed' && update.status === 'pending') {
+          failed++;
+          return;
+        }
+        
+        history[index].status = update.status;
+        if (update.txHash) {
+          history[index].txHash = update.txHash;
+        }
+        updated++;
+      } else {
+        failed++;
+      }
+    });
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📦 Bulk update: ${updated} updated, ${failed} failed`);
+    }
+    
+  } catch (error) {
+    console.error('Failed to bulk update payment status:', error);
+  }
+
+  return { updated, failed };
+}
+
+/**
  * Clear all payment history
  * WARNING: Irreversible action
  */

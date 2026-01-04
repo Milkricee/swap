@@ -190,3 +190,137 @@ export function estimateTransactionFee(): number {
   // Conservative estimate
   return 0.0001;
 }
+
+/**
+ * TX Status Information from blockchain
+ */
+export interface MoneroTxInfo {
+  txHash: string;
+  confirmations: number;
+  blockHeight?: number;
+  inTxPool: boolean;
+  timestamp?: number;
+}
+
+/**
+ * Get transaction status from Monero blockchain
+ * Uses JSON-RPC to query remote node
+ * 
+ * @param txHash - Transaction hash (64 hex chars)
+ * @param rpcUrl - Remote node URL
+ * @returns TX info or null if not found
+ */
+export async function getMoneroTxStatus(
+  txHash: string,
+  rpcUrl: string
+): Promise<MoneroTxInfo | null> {
+  try {
+    // Validate TX hash format
+    if (!/^[0-9a-fA-F]{64}$/.test(txHash)) {
+      throw new Error('Invalid TX hash format (must be 64 hex chars)');
+    }
+
+    // Query daemon for TX info via JSON-RPC
+    const response = await fetch(`${rpcUrl}/json_rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: '0',
+        method: 'get_transactions',
+        params: {
+          txs_hashes: [txHash],
+          decode_as_json: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Node RPC error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Check if TX was found
+    if (!data.result || !data.result.txs || data.result.txs.length === 0) {
+      // TX not found - might still be in pool, check pool
+      const poolStatus = await checkTxPool(txHash, rpcUrl);
+      if (poolStatus) {
+        return poolStatus;
+      }
+      return null;
+    }
+
+    const tx = data.result.txs[0];
+
+    // Get current blockchain height for confirmations
+    const heightResponse = await fetch(`${rpcUrl}/json_rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: '0',
+        method: 'get_block_count',
+      }),
+    });
+
+    const heightData = await heightResponse.json();
+    const currentHeight = heightData.result?.count || 0;
+
+    const blockHeight = tx.block_height || 0;
+    const confirmations = blockHeight > 0 ? currentHeight - blockHeight : 0;
+
+    return {
+      txHash,
+      confirmations,
+      blockHeight: blockHeight > 0 ? blockHeight : undefined,
+      inTxPool: false,
+      timestamp: tx.block_timestamp,
+    };
+
+  } catch (error) {
+    console.error(`Failed to get TX status for ${txHash}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Check if TX is in mempool (unconfirmed)
+ */
+async function checkTxPool(
+  txHash: string,
+  rpcUrl: string
+): Promise<MoneroTxInfo | null> {
+  try {
+    const response = await fetch(`${rpcUrl}/get_transaction_pool`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (!data.transactions) {
+      return null;
+    }
+
+    // Check if our TX is in the pool
+    const txInPool = data.transactions.find((t: any) => t.id_hash === txHash);
+
+    if (txInPool) {
+      return {
+        txHash,
+        confirmations: 0,
+        inTxPool: true,
+        timestamp: txInPool.receive_time,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Failed to check TX pool:', error);
+    return null;
+  }
+}

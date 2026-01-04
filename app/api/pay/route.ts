@@ -64,13 +64,13 @@ export async function POST(request: NextRequest) {
     const consolidationNeeded = status.message.includes('Consolidat');
     const txId = status.txId || `simulated-tx-${Date.now()}`;
     
-    // Save to payment history
+    // Save to payment history with PENDING status (will be updated by TX monitor)
     savePaymentToHistory({
       id: `payment-${Date.now()}`,
       timestamp: Date.now(),
       amount: validated.exactAmount.toString(),
       recipient: validated.shopAddress,
-      status: status.stage === 'completed' ? 'confirmed' : 'pending',
+      status: 'pending', // Start as pending, TX monitor will update to confirmed
       txHash: txId,
       fromWallet: 3, // Hot Wallet
       fee: '0.000001', // Approximate Monero fee
