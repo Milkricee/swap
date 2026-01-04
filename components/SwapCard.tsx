@@ -83,35 +83,82 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
   async function handleExecuteSwap() {
     if (!route) return;
 
-    setLoading(true);
-    try {
-      // Show provider URL for manual execution
-      const providerUrls: Record<string, string> = {
-        'BTCSwapXMR': 'https://btcswapxmr.com',
-        'ChangeNOW': 'https://changenow.io',
-        'GhostSwap': 'https://ghostswap.io',
-        'Jupiter': 'https://jup.ag',
-      };
+    // Need user's XMR address to receive funds
+    const xmrAddress = prompt(
+      `Enter your XMR address to receive funds:\n\n` +
+      `You will send ${route.fromAmount} ${route.fromCoin}\n` +
+      `You will receive ~${parseFloat(route.toAmount).toFixed(6)} ${route.toCoin}\n\n` +
+      `⚠️ Make sure your address is correct!`
+    );
 
-      const url = providerUrls[route.provider] || 'https://example.com';
+    if (!xmrAddress || xmrAddress.length < 95) {
+      setError('Valid XMR address required (95+ characters)');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`🔄 Executing swap: ${route.fromAmount} ${route.fromCoin} → ${route.toCoin} via ${route.provider}`);
+
+      const response = await fetch('/api/swap/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: route.provider,
+          fromCoin: route.fromCoin,
+          toCoin: route.toCoin,
+          amount: route.fromAmount,
+          xmrAddress: xmrAddress.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Swap execution failed');
+      }
+
+      // Show success modal with deposit instructions
+      const order = data.order;
+      const instructions = 
+        `✅ Swap Order Created!\n\n` +
+        `Order ID: ${order.orderId}\n` +
+        `Provider: ${order.provider}\n\n` +
+        `📤 SEND EXACTLY:\n` +
+        `${order.depositAmount} ${order.depositCurrency}\n\n` +
+        `📬 TO THIS ADDRESS:\n` +
+        `${order.depositAddress}\n\n` +
+        `📥 YOU WILL RECEIVE:\n` +
+        `~${parseFloat(order.expectedReceiveAmount).toFixed(6)} ${order.receiveCurrency}\n` +
+        `To: ${xmrAddress.substring(0, 20)}...\n\n` +
+        `⏰ Expires: ${new Date(order.expiresAt).toLocaleString()}\n\n` +
+        `⚠️ Send funds within 1 hour!\n` +
+        `Copy deposit address to clipboard?`;
       
-      const message = 
-        `🚀 Ready to execute swap!\n\n` +
-        `Provider: ${route.provider}\n` +
-        `Send: ${route.fromAmount} ${route.fromCoin}\n` +
-        `Receive: ~${parseFloat(route.toAmount).toFixed(6)} ${route.toCoin}\n` +
-        `Fee: ${route.fee}\n\n` +
-        `Opening ${route.provider}...`;
-      
-      alert(message);
-      
-      // Open provider in new tab
-      window.open(url, '_blank');
-      
+      if (confirm(instructions)) {
+        await navigator.clipboard.writeText(order.depositAddress);
+        alert('✅ Deposit address copied to clipboard!');
+      }
+
+      // Reset form
       setAmount('');
       setRoute(null);
+
+      // Optionally: Save order to localStorage for tracking
+      const savedOrders = JSON.parse(localStorage.getItem('swapOrders') || '[]');
+      savedOrders.push(order);
+      localStorage.setItem('swapOrders', JSON.stringify(savedOrders));
+
+      console.log(`✅ Swap order created: ${order.orderId}`);
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Swap failed');
+      const errorMessage = err instanceof Error ? err.message : 'Swap failed';
+      setError(errorMessage);
+      console.error('❌ Swap execution error:', err);
+      
+      alert(`❌ Swap Failed:\n\n${errorMessage}\n\nPlease try again or choose another provider.`);
     } finally {
       setLoading(false);
     }

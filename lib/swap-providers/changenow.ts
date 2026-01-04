@@ -24,6 +24,7 @@ const CHANGENOW_API_KEY = process.env.CHANGENOW_API_KEY || '';
 // Log which mode we're using (server-side only)
 if (typeof window === 'undefined') {
   console.log(`[ChangeNOW] Mode: ${IS_TESTNET || CHANGENOW_SANDBOX ? 'SANDBOX (Testnet)' : 'PRODUCTION'}`);
+}
 
 // Zod Schemas
 const ExchangeRangeSchema = z.object({
@@ -144,18 +145,12 @@ export async function getChangeNOWQuote(
       maxAmount: 100,
     };
   } catch (error) {
-    console.error('ChangeNOW quote error:', error);
-    
-    // Fallback mock quote
-    const mockRate = fromCoin === 'ETH' ? 1.5 : fromCoin === 'USDC' ? 0.006 : 10;
-    return {
-      fromAmount: amount,
-      toAmount: amount * mockRate * 0.9975, // Mock rate minus fee
-      fee: amount * 0.0025,
-      estimatedTime: '10-20 min',
-      minAmount: 0.01,
-      maxAmount: 100,
-    };
+    console.error('❌ ChangeNOW quote error:', error);
+    throw new Error(
+      error instanceof Error 
+        ? `ChangeNOW API failed: ${error.message}` 
+        : 'ChangeNOW API request failed'
+    );
   }
 }
 
@@ -204,21 +199,25 @@ export async function createChangeNOWExchange(
       status: validated.status,
     };
   } catch (error) {
-    console.error('ChangeNOW create exchange error:', error);
+    console.error('❌ ChangeNOW create exchange error:', error);
     
-    // Fallback mock exchange
-    const mockRate = fromCoin === 'ETH' ? 1.5 : fromCoin === 'USDC' ? 0.006 : 10;
-    return {
-      exchangeId: `cnow_${Date.now()}`,
-      depositAddress: fromCoin === 'ETH' 
-        ? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb' // Mock ETH address
-        : 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // Mock USDC address
-      withdrawalAddress: xmrAddress,
-      fromCurrency: fromCoin,
-      toCurrency: toCoin,
-      expectedAmount: fromAmount * mockRate * 0.9975,
-      status: 'waiting',
-    };
+    // Parse error message from ChangeNOW API
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Common ChangeNOW errors
+    if (errorMessage.includes('pair_is_inactive')) {
+      throw new Error('ChangeNOW: This currency pair is currently unavailable');
+    }
+    if (errorMessage.includes('out_of_range')) {
+      throw new Error('ChangeNOW: Amount is outside min/max limits');
+    }
+    if (errorMessage.includes('invalid_address')) {
+      throw new Error('ChangeNOW: Invalid XMR address');
+    }
+    
+    throw new Error(
+      `ChangeNOW order creation failed: ${errorMessage}`
+    );
   }
 }
 
@@ -254,11 +253,13 @@ export async function getChangeNOWStatus(exchangeId: string): Promise<{
       amountReceived: validated.amountReceive ? parseFloat(validated.amountReceive) : undefined,
     };
   } catch (error) {
-    console.error('ChangeNOW status error:', error);
+    console.error('❌ ChangeNOW status check failed:', error);
     
+    // Don't throw - status checks can fail temporarily
+    // Return unknown status to allow retry
     return {
       id: exchangeId,
-      status: 'unknown',
+      status: 'checking', // Indicates temporary failure
     };
   }
 }
