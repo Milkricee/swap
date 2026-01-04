@@ -1,6 +1,8 @@
 /**
- * Transaction Monitoring for Monero Payments
+ * Transaction Monitoring for Monero Payments - SERVER-ONLY
  * Checks TX status on blockchain and updates payment records
+ * 
+ * NO 'use client' = server-only in Next.js (not bundled for browser)
  */
 
 import { getMoneroTxStatus, type MoneroTxInfo } from '@/lib/wallets/monero-core';

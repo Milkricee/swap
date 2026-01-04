@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { getSwapHistory, type SwapOrder } from '@/lib/swap-providers/execute';
 import { getPaymentHistory, type PaymentRecord, clearPaymentHistory } from '@/lib/payment/history';
 import { clearSwapHistory } from '@/lib/swap-providers/execute';
-import { useTxMonitor } from '@/lib/hooks/useTxMonitor';
-import { useSwapMonitor } from '@/lib/hooks/useSwapMonitor';
+// Removed: useTxMonitor, useSwapMonitor - will use API calls instead
 import TransactionRow from './TransactionRow';
 import { Skeleton } from './Skeleton';
 
