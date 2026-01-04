@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { executePayment } from '@/lib/payment';
+import { sendXMR, consolidateWallets, getWalletBalance } from '@/lib/vps/client';
 import { savePaymentToHistory } from '@/lib/payment/history';
 import { z } from 'zod';
 
@@ -45,45 +45,82 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = PaymentRequestSchema.parse(body);
 
-    // Execute payment with smart consolidation
-    const status = await executePayment(
-      validated.shopAddress,
-      validated.exactAmount,
-      validated.password,
-      validated.label
-    );
+    console.log(`💸 [Payment] ${validated.exactAmount} XMR → ${validated.shopAddress.substring(0, 20)}...`);
 
-    if (status.stage === 'error') {
+    // Step 1: Check Hot Wallet (#3) balance
+    const hotWalletBalance = await getWalletBalance({ walletIndex: 2 }); // Index 2 = Wallet #3
+    
+    if (!hotWalletBalance.success) {
       return NextResponse.json(
-        { status, error: status.error },
-        { status: 400 }
+        { error: 'Failed to check wallet balance. VPS may be offline.' },
+        { status: 503 }
       );
     }
 
-    // Return success with consolidation flag
-    const consolidationNeeded = status.message.includes('Consolidat');
-    const txId = status.txId || `simulated-tx-${Date.now()}`;
-    
-    // Save to payment history with PENDING status (will be updated by TX monitor)
+    const balance = parseFloat(hotWalletBalance.balance || '0');
+    const needed = validated.exactAmount * 1.01; // +1% for fees
+
+    // Step 2: Consolidate if needed
+    if (balance < needed) {
+      console.log(`🔄 [Payment] Consolidating... Need ${needed} XMR, have ${balance} XMR`);
+      
+      const consolidateResult = await consolidateWallets(
+        [0, 1, 3, 4], // Wallets #1,2,4,5 (indices 0,1,3,4)
+        2, // Target: Wallet #3 (index 2)
+        needed - balance // Only transfer what's missing
+      );
+
+      if (!consolidateResult.success) {
+        return NextResponse.json(
+          { error: `Consolidation failed: ${consolidateResult.error}` },
+          { status: 500 }
+        );
+      }
+
+      console.log(`✅ [Payment] Consolidated: ${consolidateResult.txHashes?.length} TXs`);
+      
+      // Wait 5s for consolidation to propagate
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    // Step 3: Send payment from Hot Wallet
+    const transferResult = await sendXMR({
+      walletIndex: 2, // Wallet #3 (Hot Wallet)
+      toAddress: validated.shopAddress,
+      amount: validated.exactAmount,
+      priority: 'normal',
+    });
+
+    if (!transferResult.success) {
+      return NextResponse.json(
+        { error: `Payment failed: ${transferResult.error}` },
+        { status: 500 }
+      );
+    }
+
+    const txId = transferResult.txHash || '';
+    console.log(`✅ [Payment] Success! TX: ${txId}`);
+
+    // Save to payment history
     savePaymentToHistory({
       id: `payment-${Date.now()}`,
       timestamp: Date.now(),
       amount: validated.exactAmount.toString(),
       recipient: validated.shopAddress,
-      status: 'pending', // Start as pending, TX monitor will update to confirmed
+      status: 'pending',
       txHash: txId,
-      fromWallet: 3, // Hot Wallet
-      fee: '0.000001', // Approximate Monero fee
+      fromWallet: 3,
+      fee: transferResult.fee?.toString() || '0',
     });
-    
+
     return NextResponse.json(
       {
-        status: {
-          stage: status.stage,
-          message: status.message,
-          txId,
-        },
-        consolidationNeeded,
+        success: true,
+        txHash: txId,
+        fee: transferResult.fee,
+        message: balance < needed 
+          ? `Payment sent after consolidating wallets (TX: ${txId})`
+          : `Payment sent successfully (TX: ${txId})`,
       },
       { status: 200 }
     );
