@@ -1,24 +1,33 @@
 // Encrypted localStorage wrapper for wallet data
-import CryptoJS from 'crypto-js';
+let CryptoJS: any;
+
+// Lazy load crypto-js only when needed
+async function getCrypto() {
+  if (!CryptoJS) {
+    CryptoJS = await import('crypto-js');
+  }
+  return CryptoJS;
+}
 
 const ENCRYPTION_KEY = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || 'default-key-change-in-production';
 
 export interface EncryptedStorage {
-  get<T>(key: string): T | null;
-  set<T>(key: string, value: T): void;
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T): Promise<void>;
   remove(key: string): void;
   clear(): void;
 }
 
 export const encryptedStorage: EncryptedStorage = {
-  get<T>(key: string): T | null {
+  async get<T>(key: string): Promise<T | null> {
     if (typeof window === 'undefined') return null;
     
     try {
       const encrypted = localStorage.getItem(key);
       if (!encrypted) return null;
       
-      const decrypted = CryptoJS.AES.decrypt(encrypted, ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8);
+      const crypto = await getCrypto();
+      const decrypted = crypto.AES.decrypt(encrypted, ENCRYPTION_KEY).toString(crypto.enc.Utf8);
       return JSON.parse(decrypted) as T;
     } catch (error) {
       console.error('Decryption error:', error);
@@ -26,11 +35,12 @@ export const encryptedStorage: EncryptedStorage = {
     }
   },
 
-  set<T>(key: string, value: T): void {
+  async set<T>(key: string, value: T): Promise<void> {
     if (typeof window === 'undefined') return;
     
     try {
-      const encrypted = CryptoJS.AES.encrypt(JSON.stringify(value), ENCRYPTION_KEY).toString();
+      const crypto = await getCrypto();
+      const encrypted = crypto.AES.encrypt(JSON.stringify(value), ENCRYPTION_KEY).toString();
       localStorage.setItem(key, encrypted);
     } catch (error) {
       console.error('Encryption error:', error);
@@ -63,18 +73,18 @@ export interface SwapOrder {
   status?: string;
 }
 
-export function saveSwapOrder(order: SwapOrder): void {
-  const orders = getSwapOrders();
+export async function saveSwapOrder(order: SwapOrder): Promise<void> {
+  const orders = await getSwapOrders();
   orders.push(order);
-  encryptedStorage.set('swapOrders', orders);
+  await encryptedStorage.set('swapOrders', orders);
 }
 
-export function getSwapOrders(): SwapOrder[] {
-  return encryptedStorage.get<SwapOrder[]>('swapOrders') || [];
+export async function getSwapOrders(): Promise<SwapOrder[]> {
+  return (await encryptedStorage.get<SwapOrder[]>('swapOrders')) || [];
 }
 
-export function updateSwapOrderStatus(orderId: string, status: string): void {
-  const orders = getSwapOrders();
+export async function updateSwapOrderStatus(orderId: string, status: string): Promise<void> {
+  const orders = await getSwapOrders();
   const updated = orders.map(o => o.orderId === orderId ? { ...o, status } : o);
-  encryptedStorage.set('swapOrders', updated);
+  await encryptedStorage.set('swapOrders', updated);
 }

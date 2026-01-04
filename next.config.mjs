@@ -18,6 +18,9 @@ const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   
+  // Production optimizations
+  productionBrowserSourceMaps: false,
+  
   // Image optimization (for future use)
   images: {
     formats: ['image/avif', 'image/webp'],

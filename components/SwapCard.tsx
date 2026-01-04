@@ -10,6 +10,7 @@ import { ArrowDownUp, TrendingUp, Clock, Zap, Copy, Check, QrCode, Send, X, Load
 import { Html5Qrcode } from 'html5-qrcode';
 import { toast } from 'sonner';
 import { saveSwapOrder } from '@/lib/storage/encrypted';
+import { useDebounce } from '@/lib/utils/hooks';
 
 const SUPPORTED_COINS = ['BTC', 'ETH', 'LTC', 'SOL', 'USDC', 'XMR'];
 
@@ -36,6 +37,21 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
   const [scannerActive, setScannerActive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrReaderRef = useRef<HTMLDivElement>(null);
+
+  // Prefetch prices API for instant quotes
+  useEffect(() => {
+    fetch('/api/prices').catch(() => {});
+  }, []);
+
+  // Debounced amount for API calls (reduces requests during typing)
+  const debouncedAmount = useDebounce(amount, 600);
+
+  // Auto-fetch route when debounced amount changes
+  useEffect(() => {
+    if (debouncedAmount && parseFloat(debouncedAmount) > 0 && fromCoin !== toCoin) {
+      handleFindBestRoute();
+    }
+  }, [debouncedAmount, fromCoin, toCoin]);
 
   async function handleFindBestRoute() {
     if (!amount || parseFloat(amount) <= 0) {
@@ -138,8 +154,8 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
         duration: 10000,
       });
 
-      // Save order with encryption
-      saveSwapOrder({
+      // Save order with encryption (async lazy-loaded crypto-js)
+      await saveSwapOrder({
         orderId: order.orderId,
         provider: order.provider,
         depositAddress: order.depositAddress,

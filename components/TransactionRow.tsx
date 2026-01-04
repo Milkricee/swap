@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { SwapOrder } from '@/lib/swap-providers/execute';
 import type { PaymentRecord } from '@/lib/payment/history';
 // Removed: useSingleTxStatus - uses monero-ts which can't run in browser
@@ -20,7 +20,7 @@ function isPayment(tx: Transaction): tx is PaymentRecord {
   return 'recipient' in tx;
 }
 
-export default function TransactionRow({ tx }: TransactionRowProps) {
+function TransactionRow({ tx }: TransactionRowProps) {
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -424,6 +424,21 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
 
   return null;
 }
+
+// Memoization mit custom comparison (nur re-render bei Status-Änderung)
+export default memo(TransactionRow, (prevProps, nextProps) => {
+  const prevId = 'txHash' in prevProps.tx ? prevProps.tx.txHash : 
+                 'orderId' in prevProps.tx ? prevProps.tx.orderId : 
+                 prevProps.tx.timestamp.toString();
+  const nextId = 'txHash' in nextProps.tx ? nextProps.tx.txHash : 
+                 'orderId' in nextProps.tx ? nextProps.tx.orderId : 
+                 nextProps.tx.timestamp.toString();
+  
+  return (
+    prevId === nextId &&
+    prevProps.tx.status === nextProps.tx.status
+  );
+});
 
 /**
  * Manual Status Check Button
