@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { SwapOrder } from '@/lib/swap-providers/execute';
 import type { PaymentRecord } from '@/lib/payment/history';
 import { useSingleTxStatus } from '@/lib/hooks/useTxMonitor';
+import { getExplorerUrl, getExplorerName } from '@/lib/utils/explorer';
 
 type Transaction = SwapOrder | PaymentRecord;
 
@@ -88,6 +89,32 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
     }
   };
 
+  /**
+   * Status Badge Component
+   * Visual badge with color-coded status indicators
+   */
+  const StatusBadge = ({ status, lastChecked }: { status: string; lastChecked?: number }) => {
+    const colorClass = getStatusColor(status);
+    const icon = getStatusIcon(status);
+    
+    return (
+      <div className="inline-flex items-center gap-1.5">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${colorClass}`}
+              style={{
+                backgroundColor: status === 'confirmed' ? 'rgba(34, 197, 94, 0.1)' :
+                               status === 'pending' ? 'rgba(234, 179, 8, 0.1)' :
+                               status === 'failed' ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                borderColor: status === 'confirmed' ? 'rgba(34, 197, 94, 0.3)' :
+                            status === 'pending' ? 'rgba(234, 179, 8, 0.3)' :
+                            status === 'failed' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.1)'
+              }}
+              title={lastChecked ? `Last checked: ${new Date(lastChecked).toLocaleString()}` : undefined}>
+          {icon} {status}
+        </span>
+      </div>
+    );
+  };
+
   if (isSwap(tx)) {
     const [showDetails, setShowDetails] = useState(false);
     const [retrying, setRetrying] = useState(false);
@@ -145,9 +172,7 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
               <div className="font-mono text-white">
                 +{tx.receiveAmount} {tx.receiveCurrency}
               </div>
-              <div className={`text-xs ${getStatusColor(tx.status)}`}>
-                {getStatusIcon(tx.status)} {tx.status}
-              </div>
+              <StatusBadge status={tx.status} lastChecked={tx.lastChecked} />
             </div>
 
             {/* Actions */}
@@ -299,9 +324,7 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
               <div className="font-mono text-white">
                 -{tx.amount} XMR
               </div>
-              <div className={`text-xs ${getStatusColor(tx.status)}`}>
-                {getStatusIcon(tx.status)} {tx.status}
-              </div>
+              <StatusBadge status={tx.status} lastChecked={tx.lastChecked} />
             </div>
             
             {/* Actions */}
@@ -311,13 +334,13 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
                 <button
                   onClick={() => setShowDetails(!showDetails)}
                   className="p-1.5 hover:bg-white/10 rounded transition-colors"
-                  title="Show details"
+                  title="Show transaction details"
                 >
                   <span className="text-xs">{showDetails ? '▼' : '▶'}</span>
                 </button>
               )}
               
-              {/* Check Status Button (only for pending) */}
+              {/* Manual Status Check Button (only for pending) */}
               {shouldCheckStatus && (
                 <RefreshButton txHash={tx.txHash!} />
               )}
@@ -328,33 +351,75 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
         {/* Expandable Details */}
         {showDetails && tx.txHash && (
           <div className="px-3 pb-3 pt-0 border-t border-white/10">
-            <div className="mt-3 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-400">TX Hash:</span>
-                <a
-                  href={`https://xmrchain.net/search?value=${tx.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-[#00d4aa] hover:underline"
-                >
-                  {formatAddress(tx.txHash)}
-                </a>
-              </div>
-              {tx.fee && (
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Fee:</span>
-                  <span className="font-mono text-white">{tx.fee} XMR</span>
+            <div className="mt-3 space-y-3">
+              {/* TX Hash with Explorer Link */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-400">TX Hash:</span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={getExplorerUrl(tx.txHash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-[#00d4aa] hover:underline flex items-center gap-1"
+                    title={`View on ${getExplorerName()}`}
+                  >
+                    {formatAddress(tx.txHash)}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                  {/* Copy Button */}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(tx.txHash || '');
+                    }}
+                    className="p-1 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors"
+                    title="Copy TX hash"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-400">From Wallet:</span>
-                <span className="text-white">Wallet #{tx.fromWallet}</span>
+              </div>
+
+              {/* Payment Details */}
+              <div className="space-y-2 text-xs">
+                {tx.fee && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Network Fee:</span>
+                    <span className="font-mono text-white">{tx.fee} XMR</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-400">From Wallet:</span>
+                  <span className="text-white">Wallet #{tx.fromWallet} (Hot)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Recipient:</span>
+                  <span className="font-mono text-white text-xs break-all">
+                    {formatAddress(tx.recipient)}
+                  </span>
+                </div>
               </div>
               
-              {/* Real-time Status Check */}
+              {/* Real-time Blockchain Status Check */}
               {shouldCheckStatus && (
                 <StatusDisplay txHash={tx.txHash} />
               )}
+
+              {/* Manual Verification Help */}
+              <div className="mt-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                <div className="text-xs text-blue-300 font-medium mb-1.5">
+                  🔍 Manual Verification
+                </div>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>1. Click the TX hash link above to open {getExplorerName()}</p>
+                  <p>2. Check confirmations (10+ = confirmed)</p>
+                  <p>3. Verify recipient address matches</p>
+                  <p className="text-gray-500 mt-2">Status updates automatically every 60s</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -366,10 +431,13 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
 }
 
 /**
- * Refresh Button Component
+ * Manual Status Check Button
+ * Allows user to manually trigger TX status verification
+ * Shows loading spinner during check
  */
 function RefreshButton({ txHash }: { txHash: string }) {
   const [isChecking, setIsChecking] = useState(false);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   const checkStatus = async () => {
     if (!txHash) return;
@@ -383,14 +451,21 @@ function RefreshButton({ txHash }: { txHash: string }) {
       }
       
       const data = await response.json();
+      setLastChecked(new Date());
       
-      // Reload page to show updated status
+      // Show user-friendly notification
       if (data.status === 'confirmed') {
+        // TX confirmed - reload to update UI
+        alert(`✅ Transaction confirmed! ${data.confirmations} confirmations.`);
         window.location.reload();
+      } else if (data.inTxPool) {
+        alert(`⏳ Transaction is in mempool (unconfirmed). Current confirmations: ${data.confirmations || 0}`);
+      } else {
+        alert(`ℹ️ Status: ${data.status}. Confirmations: ${data.confirmations || 0}/10`);
       }
     } catch (error) {
       console.error('Failed to check status:', error);
-      // Silently fail - don't alert user for background checks
+      alert('❌ Failed to check status. Please verify manually in block explorer.');
     } finally {
       setIsChecking(false);
     }
@@ -400,13 +475,21 @@ function RefreshButton({ txHash }: { txHash: string }) {
     <button
       onClick={checkStatus}
       disabled={isChecking}
-      className="p-1.5 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
-      title="Check transaction status"
+      className="px-2 py-1 text-xs bg-[#00d4aa]/10 hover:bg-[#00d4aa]/20 text-[#00d4aa] 
+                 rounded transition-colors disabled:opacity-50 flex items-center gap-1.5
+                 border border-[#00d4aa]/30"
+      title={lastChecked ? `Last checked: ${lastChecked.toLocaleTimeString()}` : 'Check TX status on blockchain'}
     >
       {isChecking ? (
-        <span className="inline-block w-3 h-3 border-2 border-[#00d4aa] border-t-transparent rounded-full animate-spin" />
+        <>
+          <span className="inline-block w-3 h-3 border-2 border-[#00d4aa] border-t-transparent rounded-full animate-spin" />
+          Checking...
+        </>
       ) : (
-        <span className="text-xs">🔄</span>
+        <>
+          <span>🔄</span>
+          <span className="hidden sm:inline">Check Status</span>
+        </>
       )}
     </button>
   );

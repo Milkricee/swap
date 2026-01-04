@@ -73,12 +73,12 @@ export const productionOnlyHeaders = [
   {
     source: '/:path*',
     headers: [
-      // Stricter CSP for production (no unsafe-eval)
+      // Stricter CSP for production (unsafe-eval required for crypto-js)
       {
         key: 'Content-Security-Policy',
         value: [
           "default-src 'self'",
-          "script-src 'self'",
+          "script-src 'self' 'unsafe-eval'", // crypto-js requires eval() for AES encryption
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: https:",
           "font-src 'self' data:",

@@ -12,6 +12,7 @@ export interface PaymentRecord {
   txHash?: string;
   fromWallet: number; // Wallet 1-5
   fee?: string; // Transaction fee in XMR
+  lastChecked?: number; // Last blockchain status check timestamp
 }
 
 const STORAGE_KEY = 'payment_history';
