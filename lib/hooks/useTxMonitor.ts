@@ -101,7 +101,13 @@ export function useTxMonitor(options: UseTxMonitorOptions = {}) {
    */
   const refreshNow = useCallback(async () => {
     // Force check regardless of last run time
-    localStorage.removeItem('tx_monitor_last_run');
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('tx_monitor_last_run');
+      } catch (error) {
+        console.warn('Failed to remove monitoring schedule:', error);
+      }
+    }
     await checkPendingPayments();
   }, [checkPendingPayments]);
 

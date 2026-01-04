@@ -195,8 +195,8 @@ export function logSwapError(
     error: parsedError.toJSON(),
     metadata: {
       ...metadata,
-      userAgent: navigator.userAgent,
-      url: window.location.href,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+      url: typeof window !== 'undefined' ? window.location.href : 'unknown',
     },
   };
 
@@ -206,13 +206,15 @@ export function logSwapError(
   }
 
   // Store in localStorage (limit to last 20 errors)
-  try {
-    const logs = JSON.parse(localStorage.getItem('swap_error_logs') || '[]');
-    logs.unshift(logEntry);
-    logs.splice(20); // Keep only last 20
-    localStorage.setItem('swap_error_logs', JSON.stringify(logs));
-  } catch (e) {
-    console.warn('Failed to store error log:', e);
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const logs = JSON.parse(localStorage.getItem('swap_error_logs') || '[]');
+      logs.unshift(logEntry);
+      logs.splice(20); // Keep only last 20
+      localStorage.setItem('swap_error_logs', JSON.stringify(logs));
+    } catch (e) {
+      console.warn('Failed to store error log:', e);
+    }
   }
 }
 
@@ -225,11 +227,12 @@ export function getErrorLogs(): Array<{
   error: ReturnType<SwapError['toJSON']>;
   metadata?: Record<string, unknown>;
 }> {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return [];
 
   try {
     return JSON.parse(localStorage.getItem('swap_error_logs') || '[]');
-  } catch {
+  } catch (error) {
+    console.warn('Failed to get error logs:', error);
     return [];
   }
 }
@@ -238,6 +241,11 @@ export function getErrorLogs(): Array<{
  * Clear error logs
  */
 export function clearErrorLogs(): void {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem('swap_error_logs');
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+  
+  try {
+    localStorage.removeItem('swap_error_logs');
+  } catch (error) {
+    console.warn('Failed to clear error logs:', error);
+  }
 }

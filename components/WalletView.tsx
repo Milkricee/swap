@@ -38,15 +38,6 @@ export default function WalletView() {
       getCryptoPrices();
     }, 300000); // 5 minutes
     
-  useEffect(() => {
-    loadWallets();
-    
-    // Load prices on mount and every 5 minutes
-    getCryptoPrices();
-    const interval = setInterval(() => {
-      getCryptoPrices();
-    }, 300000); // 5 minutes
-    
     return () => clearInterval(interval);
   }, []);
 

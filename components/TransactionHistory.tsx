@@ -65,51 +65,70 @@ export default function TransactionHistory() {
   });
 
   const handleExportCSV = () => {
-    const csvRows = [
-      ['Type', 'Date', 'Amount', 'Currency', 'Status', 'Details'].join(','),
-    ];
-
-    transactions.forEach(tx => {
-      if (tx.type === 'swap') {
-        const swap = tx as SwapOrder;
-        csvRows.push([
-          'Swap',
-          new Date(swap.timestamp).toISOString(),
-          swap.receiveAmount,
-          swap.receiveCurrency,
-          swap.status,
-          `${swap.depositCurrency} → ${swap.receiveCurrency} via ${swap.provider}`,
-        ].join(','));
-      } else {
-        const payment = tx as PaymentRecord;
-        csvRows.push([
-          'Payment',
-          new Date(payment.timestamp).toISOString(),
-          payment.amount,
-          'XMR',
-          payment.status,
-          `To ${payment.recipient.slice(0, 10)}...`,
-        ].join(','));
+    try {
+      if (transactions.length === 0) {
+        alert('No transactions to export');
+        return;
       }
-    });
 
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `transactions_${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      const csvRows = [
+        ['Type', 'Date', 'Amount', 'Currency', 'Status', 'Details'].join(','),
+      ];
+
+      transactions.forEach(tx => {
+        if (tx.type === 'swap') {
+          const swap = tx as SwapOrder;
+          csvRows.push([
+            'Swap',
+            new Date(swap.timestamp).toISOString(),
+            String(swap.receiveAmount ?? 0),
+            swap.receiveCurrency ?? 'XMR',
+            swap.status ?? 'unknown',
+            `${swap.depositCurrency ?? '?'} → ${swap.receiveCurrency ?? 'XMR'} via ${swap.provider ?? 'unknown'}`,
+          ].join(','));
+        } else {
+          const payment = tx as PaymentRecord;
+          csvRows.push([
+            'Payment',
+            new Date(payment.timestamp).toISOString(),
+            String(payment.amount ?? 0),
+            'XMR',
+            payment.status ?? 'unknown',
+            `To ${(payment.recipient ?? 'unknown').slice(0, 10)}...`,
+          ].join(','));
+        }
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `xmr-transactions-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export CSV:', error);
+      alert('Failed to export CSV. Please try again.');
+    }
   };
 
   const handleClearHistory = () => {
+    if (transactions.length === 0) {
+      return;
+    }
+
     if (confirm('⚠️ Clear ALL transaction history? This cannot be undone.')) {
-      clearSwapHistory();
-      clearPaymentHistory();
-      loadTransactions();
+      try {
+        clearSwapHistory();
+        clearPaymentHistory();
+        loadTransactions();
+      } catch (error) {
+        console.error('Failed to clear history:', error);
+        alert('Failed to clear history. Please try again.');
+      }
     }
   };
 

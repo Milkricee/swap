@@ -215,9 +215,10 @@ export async function monitorPendingPayments(
  * Avoids checking too frequently (max every 60 seconds)
  */
 export function shouldRunMonitoring(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return false;
 
-  const lastRun = localStorage.getItem('tx_monitor_last_run');
+  try {
+    const lastRun = localStorage.getItem('tx_monitor_last_run');
   
   if (!lastRun) {
     return true;
@@ -229,15 +230,23 @@ export function shouldRunMonitoring(): boolean {
 
   // Run at most every 60 seconds
   return timeSinceLastRun > 60_000;
+  } catch (error) {
+    console.warn('Failed to check monitoring schedule:', error);
+    return true; // Allow check if localStorage fails
+  }
 }
 
 /**
  * Mark monitoring as run (prevents too frequent checks)
  */
 export function markMonitoringRun(): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   
-  localStorage.setItem('tx_monitor_last_run', Date.now().toString());
+  try {
+    localStorage.setItem('tx_monitor_last_run', Date.now().toString());
+  } catch (error) {
+    console.warn('Failed to mark monitoring run:', error);
+  }
 }
 
 /**
@@ -247,8 +256,16 @@ export function getMonitoringStats() {
   const history = getPaymentHistory();
   const pendingWithTx = history.filter(p => p.status === 'pending' && p.txHash);
   
-  const lastRun = localStorage.getItem('tx_monitor_last_run');
-  const lastRunTime = lastRun ? new Date(parseInt(lastRun)) : null;
+  let lastRunTime: Date | null = null;
+  
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      const lastRun = localStorage.getItem('tx_monitor_last_run');
+      lastRunTime = lastRun ? new Date(parseInt(lastRun)) : null;
+    } catch (error) {
+      console.warn('Failed to get last monitoring run time:', error);
+    }
+  }
 
   return {
     totalPayments: history.length,

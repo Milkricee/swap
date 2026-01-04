@@ -364,15 +364,24 @@ export async function getSwapStatus(
  * Save swap to localStorage
  */
 export function saveSwapToHistory(swap: SwapOrder): void {
-  const history = getSwapHistory();
-  history.unshift(swap);
-  
-  // Keep last 50 swaps
-  if (history.length > 50) {
-    history.splice(50);
+  if (typeof localStorage === 'undefined') {
+    console.warn('localStorage not available, cannot save swap history');
+    return;
   }
-  
-  localStorage.setItem('swap_history', JSON.stringify(history));
+
+  try {
+    const history = getSwapHistory();
+    history.unshift(swap);
+    
+    // Keep last 50 swaps
+    if (history.length > 50) {
+      history.splice(50);
+    }
+    
+    localStorage.setItem('swap_history', JSON.stringify(history));
+  } catch (error) {
+    console.error('Failed to save swap to history:', error);
+  }
 }
 
 /**
@@ -382,20 +391,29 @@ export function updateSwapStatus(
   swapId: string,
   updates: Partial<Pick<SwapOrder, 'status' | 'errorMessage' | 'errorCode' | 'lastChecked' | 'retryCount'>>
 ): void {
-  const history = getSwapHistory();
-  const index = history.findIndex(s => s.id === swapId);
-  
-  if (index !== -1) {
-    history[index] = {
-      ...history[index],
-      ...updates,
-      lastChecked: Date.now(),
-    };
-    localStorage.setItem('swap_history', JSON.stringify(history));
+  if (typeof localStorage === 'undefined') {
+    console.warn('localStorage not available, cannot update swap status');
+    return;
+  }
+
+  try {
+    const history = getSwapHistory();
+    const index = history.findIndex(s => s.id === swapId);
     
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ Swap ${swapId} updated:`, updates);
+    if (index !== -1) {
+      history[index] = {
+        ...history[index],
+        ...updates,
+        lastChecked: Date.now(),
+      };
+      localStorage.setItem('swap_history', JSON.stringify(history));
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`✅ Swap ${swapId} updated:`, updates);
+      }
     }
+  } catch (error) {
+    console.error('Failed to update swap status:', error);
   }
 }
 
@@ -404,23 +422,23 @@ export function updateSwapStatus(
  * Creates a new swap order with incremented retry count
  */
 export async function retrySwap(originalSwapId: string): Promise<SwapOrder | null> {
-  const history = getSwapHistory();
-  const originalSwap = history.find(s => s.id === originalSwapId);
-  
-  if (!originalSwap) {
-    throw new ValidationError('Original swap not found');
-  }
-
-  if (!originalSwap.canRetry) {
-    throw new ValidationError('This swap cannot be retried');
-  }
-
-  // Only allow retry for failed, timeout, or cancelled swaps
-  if (!['failed', 'timeout', 'cancelled'].includes(originalSwap.status)) {
-    throw new ValidationError('Can only retry failed, timeout, or cancelled swaps');
-  }
-
   try {
+    const history = getSwapHistory();
+    const originalSwap = history.find(s => s.id === originalSwapId);
+    
+    if (!originalSwap) {
+      throw new ValidationError('Original swap not found');
+    }
+
+    if (!originalSwap.canRetry) {
+      throw new ValidationError('This swap cannot be retried');
+    }
+
+    // Only allow retry for failed, timeout, or cancelled swaps
+    if (!['failed', 'timeout', 'cancelled'].includes(originalSwap.status)) {
+      throw new ValidationError('Can only retry failed, timeout, or cancelled swaps');
+    }
+
     const newSwap = await executeSwap(
       originalSwap.provider,
       originalSwap.fromCoin,
@@ -443,8 +461,6 @@ export async function retrySwap(originalSwapId: string): Promise<SwapOrder | nul
   } catch (error) {
     logSwapError('retrySwap', error, {
       originalSwapId,
-      provider: originalSwap.provider,
-      retryCount: originalSwap.retryCount,
     });
     throw error;
   }
@@ -454,39 +470,49 @@ export async function retrySwap(originalSwapId: string): Promise<SwapOrder | nul
  * Check for timed-out swaps and update their status
  */
 export function checkSwapTimeouts(): number {
-  const history = getSwapHistory();
-  const now = Date.now();
-  let timeoutCount = 0;
-
-  history.forEach((swap, index) => {
-    // Only check pending/processing swaps
-    if (!['pending', 'processing'].includes(swap.status)) {
-      return;
-    }
-
-    // Check if timed out
-    if (swap.timeoutAt && now > swap.timeoutAt) {
-      history[index] = {
-        ...swap,
-        status: 'timeout',
-        errorMessage: 'Swap timed out. No deposit detected within 30 minutes.',
-        errorCode: 'TIMEOUT',
-        lastChecked: now,
-        canRetry: true,
-      };
-      timeoutCount++;
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`⏰ Swap ${swap.id} timed out`);
-      }
-    }
-  });
-
-  if (timeoutCount > 0) {
-    localStorage.setItem('swap_history', JSON.stringify(history));
+  if (typeof localStorage === 'undefined') {
+    console.warn('localStorage not available, cannot check swap timeouts');
+    return 0;
   }
 
-  return timeoutCount;
+  try {
+    const history = getSwapHistory();
+    const now = Date.now();
+    let timeoutCount = 0;
+
+    history.forEach((swap, index) => {
+      // Only check pending/processing swaps
+      if (!['pending', 'processing'].includes(swap.status)) {
+        return;
+      }
+
+      // Check if timed out
+      if (swap.timeoutAt && now > swap.timeoutAt) {
+        history[index] = {
+          ...swap,
+          status: 'timeout',
+          errorMessage: 'Swap timed out. No deposit detected within 30 minutes.',
+          errorCode: 'TIMEOUT',
+          lastChecked: now,
+          canRetry: true,
+        };
+        timeoutCount++;
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`⏰ Swap ${swap.id} timed out`);
+        }
+      }
+    });
+
+    if (timeoutCount > 0) {
+      localStorage.setItem('swap_history', JSON.stringify(history));
+    }
+
+    return timeoutCount;
+  } catch (error) {
+    console.error('Failed to check swap timeouts:', error);
+    return 0;
+  }
 }
 
 /**

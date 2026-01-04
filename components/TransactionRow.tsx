@@ -92,8 +92,8 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
     const [showDetails, setShowDetails] = useState(false);
     const [retrying, setRetrying] = useState(false);
 
-    // Check if swap can be retried
-    const canRetry = tx.canRetry && ['failed', 'timeout', 'cancelled'].includes(tx.status);
+    // Check if swap can be retried (with null safety)
+    const canRetry = Boolean(tx.canRetry) && ['failed', 'timeout', 'cancelled'].includes(tx.status);
 
     const handleRetry = async () => {
       if (!canRetry) return;
@@ -106,10 +106,13 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
         if (newSwap) {
           // Reload page to show new swap
           window.location.reload();
+        } else {
+          alert('Failed to create retry swap');
         }
       } catch (error) {
         console.error('Retry failed:', error);
-        alert(error instanceof Error ? error.message : 'Failed to retry swap');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to retry swap';
+        alert(errorMessage);
       } finally {
         setRetrying(false);
       }
@@ -129,7 +132,7 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
               </div>
               <div className="text-xs text-gray-400">
                 {formatDate(tx.timestamp)} • {tx.provider}
-                {tx.retryCount && tx.retryCount > 0 && (
+                {tx.retryCount != null && tx.retryCount > 0 && (
                   <span className="ml-2 text-amber-400">• Retry #{tx.retryCount}</span>
                 )}
               </div>
@@ -369,9 +372,16 @@ function RefreshButton({ txHash }: { txHash: string }) {
   const [isChecking, setIsChecking] = useState(false);
 
   const checkStatus = async () => {
+    if (!txHash) return;
+    
     setIsChecking(true);
     try {
       const response = await fetch(`/api/tx-status?txHash=${txHash}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       // Reload page to show updated status
@@ -380,6 +390,7 @@ function RefreshButton({ txHash }: { txHash: string }) {
       }
     } catch (error) {
       console.error('Failed to check status:', error);
+      // Silently fail - don't alert user for background checks
     } finally {
       setIsChecking(false);
     }
@@ -440,14 +451,14 @@ function StatusDisplay({ txHash }: { txHash: string }) {
       </div>
       <div className="flex justify-between">
         <span className="text-gray-400">Confirmations:</span>
-        <span className="text-white font-mono">{data.confirmations}</span>
+        <span className="text-white font-mono">{data.confirmations ?? 0}</span>
       </div>
       {data.inTxPool && (
         <div className="text-yellow-400 text-xs">
           ⏳ In mempool (unconfirmed)
         </div>
       )}
-      {data.blockHeight && (
+      {data.blockHeight != null && (
         <div className="flex justify-between">
           <span className="text-gray-400">Block:</span>
           <span className="text-white font-mono">{data.blockHeight}</span>
