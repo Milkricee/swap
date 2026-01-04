@@ -402,11 +402,6 @@ export default function TransactionRow({ tx }: TransactionRowProps) {
                   </span>
                 </div>
               </div>
-              
-              {/* Real-time Blockchain Status Check */}
-              {shouldCheckStatus && (
-                <StatusDisplay txHash={tx.txHash} />
-              )}
 
               {/* Manual Verification Help */}
               <div className="mt-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
@@ -495,58 +490,4 @@ function RefreshButton({ txHash }: { txHash: string }) {
   );
 }
 
-/**
- * Status Display Component
- */
-function StatusDisplay({ txHash }: { txHash: string }) {
-  const { data, loading, error } = useSingleTxStatus(txHash);
 
-  if (loading) {
-    return (
-      <div className="text-gray-400 flex items-center gap-2">
-        <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-        Checking blockchain...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-red-400 text-xs">
-        ⚠️ {error}
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  return (
-    <div className="space-y-1 pt-2 border-t border-white/5">
-      <div className="flex justify-between">
-        <span className="text-gray-400">Blockchain Status:</span>
-        <span className={`font-medium ${
-          data.status === 'confirmed' ? 'text-green-400' :
-          data.status === 'pending' ? 'text-yellow-400' :
-          'text-gray-400'
-        }`}>
-          {data.status}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-gray-400">Confirmations:</span>
-        <span className="text-white font-mono">{data.confirmations ?? 0}</span>
-      </div>
-      {data.inTxPool && (
-        <div className="text-yellow-400 text-xs">
-          ⏳ In mempool (unconfirmed)
-        </div>
-      )}
-      {data.blockHeight != null && (
-        <div className="flex justify-between">
-          <span className="text-gray-400">Block:</span>
-          <span className="text-white font-mono">{data.blockHeight}</span>
-        </div>
-      )}
-    </div>
-  );
-}

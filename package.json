@@ -22,6 +22,7 @@
     "ethers": "^6.13.4",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.468.0",
+    "monero-javascript": "^0.8.4",
     "monero-ts": "^0.11.8",
     "next": "^16.1.1",
     "react": "^19.0.0",
