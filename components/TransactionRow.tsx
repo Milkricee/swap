@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { SwapOrder } from '@/lib/swap-providers/execute';
 import type { PaymentRecord } from '@/lib/payment/history';
-import { useSingleTxStatus } from '@/lib/hooks/useTxMonitor';
+// Removed: useSingleTxStatus - uses monero-ts which can't run in browser
 import { getExplorerUrl, getExplorerName } from '@/lib/utils/explorer';
 
 type Transaction = SwapOrder | PaymentRecord;

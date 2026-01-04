@@ -1,13 +1,13 @@
 /**
- * Monero Wallet Core - SERVER-ONLY
+ * Monero Wallet Core - SERVER-ONLY Implementation
  * 
- * Uses monero-ts (requires Node.js fs, crypto modules)
- * Can ONLY run in API routes, never in browser
- * 
- * NO 'use client' directive = server-only by default in Next.js
+ * CRITICAL: This file runs ONLY in Node.js (API routes)
+ * monero-javascript CANNOT be bundled for the browser
  */
 
-import { MoneroWalletFull, MoneroNetworkType } from 'monero-ts';
+// Import monero-javascript only when module loads (server-side)
+const monerojs = eval('require')('monero-javascript');
+const { MoneroWalletFull, MoneroNetworkType } = monerojs;
 
 export interface MoneroWalletConfig {
   rpcUrl: string;

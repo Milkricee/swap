@@ -34,27 +34,8 @@ export default function TransactionHistory() {
     loadTransactions();
   }, []);
 
-  // Auto-monitor pending payments (checks every 60s)
-  const monitor = useTxMonitor({
-    enabled: true,
-    interval: 60_000, // 60 seconds
-    onUpdate: () => {
-      // Reload transactions when status updates
-      loadTransactions();
-    },
-  });
-
-  // Auto-monitor swap timeouts (checks every 2min)
-  const swapMonitor = useSwapMonitor({
-    enabled: true,
-    interval: 120_000, // 2 minutes
-    onTimeout: (count) => {
-      // Reload transactions when timeouts detected
-      if (count > 0) {
-        loadTransactions();
-      }
-    },
-  });
+  // REMOVED: useTxMonitor and useSwapMonitor - they import monero-ts which can't run in browser
+  // TODO: Replace with API-based polling to /api/tx-status if needed
 
   const filteredTransactions = transactions.filter(tx => {
     if (filter === 'all') return true;
