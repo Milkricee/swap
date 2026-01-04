@@ -82,23 +82,27 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
     }
   }
 
+  const [showXMRAddressModal, setShowXMRAddressModal] = useState(false);
+  const [manualXMRAddress, setManualXMRAddress] = useState('');
+  const [xmrAddressScannerActive, setXMRAddressScannerActive] = useState(false);
+  const xmrScannerRef = useRef<Html5Qrcode | null>(null);
+
   async function handleExecuteSwap() {
     if (!route) return;
+    setShowXMRAddressModal(true);
+  }
 
-    // Need user's XMR address to receive funds
-    const xmrAddress = prompt(
-      `Enter your XMR address to receive funds:\n\n` +
-      `You will send ${route.fromAmount} ${route.fromCoin}\n` +
-      `You will receive ~${parseFloat(route.toAmount).toFixed(6)} ${route.toCoin}\n\n` +
-      `⚠️ Make sure your address is correct!`
-    );
+  async function handleXMRAddressConfirm() {
+    if (!route) return;
+
+    const xmrAddress = manualXMRAddress.trim();
 
     if (!xmrAddress || xmrAddress.length < 95) {
       toast.error('Invalid XMR Address', { description: 'Address must be 95+ characters' });
-      setError('Valid XMR address required (95+ characters)');
       return;
     }
 
+    setShowXMRAddressModal(false);
     setLoading(true);
     setError(null);
 
@@ -222,6 +226,49 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
     } catch (error) {
       setStatus({ stage: 'error', message: 'Payment failed', error: error instanceof Error ? error.message : 'Network error' });
     }
+  }
+
+  async function handleXMRQRScan() {
+    if (xmrAddressScannerActive) {
+      await stopXMRScanner();
+      return;
+    }
+    setXMRAddressScannerActive(true);
+    try {
+      const qrScanner = new Html5Qrcode('xmr-qr-reader');
+      xmrScannerRef.current = qrScanner;
+      await qrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          // Parse XMR address from QR (could be monero:ADDRESS or just ADDRESS)
+          const address = decodedText.startsWith('monero:')
+            ? decodedText.replace('monero:', '').split('?')[0]
+            : decodedText;
+          setManualXMRAddress(address);
+          stopXMRScanner();
+          toast.success('Address Scanned', { description: 'XMR address detected from QR code' });
+        },
+        (errorMessage) => console.log('Scanning...', errorMessage)
+      );
+    } catch (err) {
+      console.error('XMR QR Scanner error:', err);
+      toast.error('Camera Error', { description: 'Camera access denied or not available' });
+      setXMRAddressScannerActive(false);
+    }
+  }
+
+  async function stopXMRScanner() {
+    if (xmrScannerRef.current) {
+      try {
+        await xmrScannerRef.current.stop();
+        xmrScannerRef.current.clear();
+      } catch (err) {
+        console.error('Stop XMR scanner error:', err);
+      }
+      xmrScannerRef.current = null;
+    }
+    setXMRAddressScannerActive(false);
   }
 
   async function handleQRScan() {
@@ -678,6 +725,89 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
             </Button>
           </div>
         </Card>
+      )}
+
+      {/* XMR Address Modal */}
+      {showXMRAddressModal && route && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <Card className="backdrop-blur-md bg-[#0a0a0a]/95 border-white/20 p-6 max-w-md w-full animate-in zoom-in-95 duration-200">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Enter XMR Address</h3>
+                <button
+                  onClick={() => { setShowXMRAddressModal(false); setManualXMRAddress(''); stopXMRScanner(); }}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/70">You Send</span>
+                  <span className="text-white font-semibold">{route.fromAmount} {route.fromCoin}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/70">You Receive</span>
+                  <span className="text-[#00d4aa] font-bold">~{parseFloat(route.toAmount).toFixed(6)} {route.toCoin}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm text-white/70">
+                  XMR Receiving Address
+                  <span className="text-red-400 ml-1">*</span>
+                </label>
+
+                {/* QR Scanner Container */}
+                {xmrAddressScannerActive && (
+                  <div id="xmr-qr-reader" className="rounded-lg overflow-hidden border-2 border-[#00d4aa]"></div>
+                )}
+
+                <Input
+                  value={manualXMRAddress}
+                  onChange={(e) => setManualXMRAddress(e.target.value)}
+                  placeholder="4ABC...xyz (95+ characters)"
+                  className="font-mono text-sm bg-white/5 border-white/20"
+                  disabled={xmrAddressScannerActive}
+                />
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleXMRQRScan}
+                    variant="outline"
+                    className="flex-1 border-white/20 hover:bg-white/10"
+                  >
+                    <QrCode className="w-4 h-4 mr-2" />
+                    {xmrAddressScannerActive ? 'Stop Scanner' : 'Scan QR Code'}
+                  </Button>
+                </div>
+
+                <div className="text-xs text-white/50 flex items-start gap-2">
+                  <span>⚠️</span>
+                  <span>Make sure your XMR address is correct. Funds sent to wrong address cannot be recovered.</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => { setShowXMRAddressModal(false); setManualXMRAddress(''); stopXMRScanner(); }}
+                  variant="outline"
+                  className="flex-1 border-white/20 hover:bg-white/10"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleXMRAddressConfirm}
+                  disabled={!manualXMRAddress || manualXMRAddress.length < 95}
+                  className="flex-1 bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-semibold disabled:opacity-50"
+                >
+                  Confirm & Execute
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

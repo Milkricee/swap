@@ -1,11 +1,59 @@
 'use client';
 
 import { useState } from 'react';
-import SwapCard from "@/components/SwapCard";
-import WalletView from "@/components/WalletView";
-import PaymentForm from "@/components/PaymentForm";
-import TransactionHistory from "@/components/TransactionHistory";
-import AddressBookManager from "@/components/AddressBookManager";
+import dynamic from 'next/dynamic';
+import { Loader2 } from 'lucide-react';
+
+// Lazy Loading mit Skeleton Fallbacks
+const SwapCard = dynamic(() => import('@/components/SwapCard'), {
+  loading: () => (
+    <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-8 animate-pulse">
+      <div className="h-96 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00d4aa]" />
+      </div>
+    </div>
+  ),
+});
+
+const WalletView = dynamic(() => import('@/components/WalletView'), {
+  loading: () => (
+    <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 animate-pulse">
+      <div className="h-64 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00d4aa]" />
+      </div>
+    </div>
+  ),
+});
+
+const PaymentForm = dynamic(() => import('@/components/PaymentForm'), {
+  loading: () => (
+    <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 animate-pulse">
+      <div className="h-80 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00d4aa]" />
+      </div>
+    </div>
+  ),
+});
+
+const TransactionHistory = dynamic(() => import('@/components/TransactionHistory'), {
+  loading: () => (
+    <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 animate-pulse">
+      <div className="h-96 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00d4aa]" />
+      </div>
+    </div>
+  ),
+});
+
+const AddressBookManager = dynamic(() => import('@/components/AddressBookManager'), {
+  loading: () => (
+    <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 animate-pulse">
+      <div className="h-64 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00d4aa]" />
+      </div>
+    </div>
+  ),
+});
 
 export default function Home() {
   const [toCoin, setToCoin] = useState('XMR');
