@@ -8,6 +8,8 @@ import type { SwapRoute } from '@/types/wallet';
 import type { PaymentStatus } from '@/lib/payment';
 import { ArrowDownUp, TrendingUp, Clock, Zap, Copy, Check, QrCode, Send, X, Loader2, CheckCircle2, XCircle, Wallet } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { toast } from 'sonner';
+import { saveSwapOrder } from '@/lib/storage/encrypted';
 
 const SUPPORTED_COINS = ['BTC', 'ETH', 'LTC', 'SOL', 'USDC', 'XMR'];
 
@@ -92,6 +94,7 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
     );
 
     if (!xmrAddress || xmrAddress.length < 95) {
+      toast.error('Invalid XMR Address', { description: 'Address must be 95+ characters' });
       setError('Valid XMR address required (95+ characters)');
       return;
     }
@@ -122,34 +125,33 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
 
       // Show success modal with deposit instructions
       const order = data.order;
-      const instructions = 
-        `✅ Swap Order Created!\n\n` +
-        `Order ID: ${order.orderId}\n` +
-        `Provider: ${order.provider}\n\n` +
-        `📤 SEND EXACTLY:\n` +
-        `${order.depositAmount} ${order.depositCurrency}\n\n` +
-        `📬 TO THIS ADDRESS:\n` +
-        `${order.depositAddress}\n\n` +
-        `📥 YOU WILL RECEIVE:\n` +
-        `~${parseFloat(order.expectedReceiveAmount).toFixed(6)} ${order.receiveCurrency}\n` +
-        `To: ${xmrAddress.substring(0, 20)}...\n\n` +
-        `⏰ Expires: ${new Date(order.expiresAt).toLocaleString()}\n\n` +
-        `⚠️ Send funds within 1 hour!\n` +
-        `Copy deposit address to clipboard?`;
       
-      if (confirm(instructions)) {
-        await navigator.clipboard.writeText(order.depositAddress);
-        alert('✅ Deposit address copied to clipboard!');
-      }
+      // Copy deposit address immediately
+      await navigator.clipboard.writeText(order.depositAddress);
+      
+      toast.success('Swap Order Created!', {
+        description: `Send ${order.depositAmount} ${order.depositCurrency} to address (copied to clipboard)`,
+        duration: 10000,
+      });
+
+      // Save order with encryption
+      saveSwapOrder({
+        orderId: order.orderId,
+        provider: order.provider,
+        depositAddress: order.depositAddress,
+        depositAmount: order.depositAmount,
+        depositCurrency: order.depositCurrency,
+        expectedReceiveAmount: order.expectedReceiveAmount,
+        receiveCurrency: order.receiveCurrency,
+        recipientAddress: xmrAddress,
+        expiresAt: order.expiresAt,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      });
 
       // Reset form
       setAmount('');
       setRoute(null);
-
-      // Optionally: Save order to localStorage for tracking
-      const savedOrders = JSON.parse(localStorage.getItem('swapOrders') || '[]');
-      savedOrders.push(order);
-      localStorage.setItem('swapOrders', JSON.stringify(savedOrders));
 
       console.log(`✅ Swap order created: ${order.orderId}`);
 
@@ -158,7 +160,10 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
       setError(errorMessage);
       console.error('❌ Swap execution error:', err);
       
-      alert(`❌ Swap Failed:\n\n${errorMessage}\n\nPlease try again or choose another provider.`);
+      toast.error('Swap Failed', { 
+        description: errorMessage + '. Try another provider.',
+        duration: 8000,
+      });
     } finally {
       setLoading(false);
     }
@@ -233,7 +238,7 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
       );
     } catch (err) {
       console.error('QR Scanner error:', err);
-      alert('Camera access denied or not available');
+      toast.error('Camera Error', { description: 'Camera access denied or not available' });
       setScannerActive(false);
     }
   }

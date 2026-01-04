@@ -47,3 +47,34 @@ export const encryptedStorage: EncryptedStorage = {
     localStorage.clear();
   },
 };
+
+// Swap order specific helpers
+export interface SwapOrder {
+  orderId: string;
+  provider: string;
+  depositAddress: string;
+  depositAmount: string;
+  depositCurrency: string;
+  expectedReceiveAmount: string;
+  receiveCurrency: string;
+  recipientAddress: string;
+  expiresAt: string;
+  createdAt: string;
+  status?: string;
+}
+
+export function saveSwapOrder(order: SwapOrder): void {
+  const orders = getSwapOrders();
+  orders.push(order);
+  encryptedStorage.set('swapOrders', orders);
+}
+
+export function getSwapOrders(): SwapOrder[] {
+  return encryptedStorage.get<SwapOrder[]>('swapOrders') || [];
+}
+
+export function updateSwapOrderStatus(orderId: string, status: string): void {
+  const orders = getSwapOrders();
+  const updated = orders.map(o => o.orderId === orderId ? { ...o, status } : o);
+  encryptedStorage.set('swapOrders', updated);
+}

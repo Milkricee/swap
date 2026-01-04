@@ -4,6 +4,7 @@ import "./globals.css";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import Script from "next/script";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -53,6 +54,7 @@ export default function RootLayout({
       <body className={`${inter.variable} antialiased`}>
         <ErrorBoundary>
           <KeyboardShortcuts />
+          <Toaster position="top-right" theme="dark" richColors />
           {children}
         </ErrorBoundary>
 
