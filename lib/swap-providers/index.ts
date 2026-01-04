@@ -281,9 +281,29 @@ export {
   saveSwapToHistory,
   getSwapHistory,
   clearSwapHistory,
+  updateSwapStatus,
+  retrySwap,
+  checkSwapTimeouts,
   type SwapOrder,
   type SwapStatus,
+  type SwapOrderStatus,
 } from './execute';
+
+export {
+  SwapError,
+  NetworkError,
+  APIError,
+  ProviderError,
+  TimeoutError,
+  ValidationError,
+  InsufficientFundsError,
+  parseSwapError,
+  getErrorMessage,
+  isRetryable,
+  logSwapError,
+  getErrorLogs,
+  clearErrorLogs,
+} from './errors';
 
 export type { SwapRoute, SwapProvider };
 export function getProviders(): SwapProvider[] {

@@ -5,6 +5,7 @@ import { getSwapHistory, type SwapOrder } from '@/lib/swap-providers/execute';
 import { getPaymentHistory, type PaymentRecord, clearPaymentHistory } from '@/lib/payment/history';
 import { clearSwapHistory } from '@/lib/swap-providers/execute';
 import { useTxMonitor } from '@/lib/hooks/useTxMonitor';
+import { useSwapMonitor } from '@/lib/hooks/useSwapMonitor';
 import TransactionRow from './TransactionRow';
 import { Skeleton } from './Skeleton';
 
@@ -41,6 +42,18 @@ export default function TransactionHistory() {
     onUpdate: () => {
       // Reload transactions when status updates
       loadTransactions();
+    },
+  });
+
+  // Auto-monitor swap timeouts (checks every 2min)
+  const swapMonitor = useSwapMonitor({
+    enabled: true,
+    interval: 120_000, // 2 minutes
+    onTimeout: (count) => {
+      // Reload transactions when timeouts detected
+      if (count > 0) {
+        loadTransactions();
+      }
     },
   });
 
@@ -163,6 +176,19 @@ export default function TransactionHistory() {
             <span>
               {monitor.pendingCount} payment{monitor.pendingCount > 1 ? 's' : ''} pending confirmation
               {monitor.lastCheck && ` • Last checked ${monitor.lastCheck.toLocaleTimeString()}`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Swap Monitor Info */}
+      {swapMonitor.timeoutsDetected > 0 && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm">
+          <div className="flex items-center gap-2 text-red-400">
+            <span>⏰</span>
+            <span>
+              {swapMonitor.timeoutsDetected} swap{swapMonitor.timeoutsDetected > 1 ? 's' : ''} timed out
+              {swapMonitor.lastCheck && ` • Last checked ${swapMonitor.lastCheck.toLocaleTimeString()}`}
             </span>
           </div>
         </div>
