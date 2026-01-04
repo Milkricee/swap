@@ -72,18 +72,18 @@ const nextConfig = {
               ? [
                   "default-src 'self'",
                   "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-                  "style-src 'self' 'unsafe-inline'",
+                  "style-src 'self' 'unsafe-inline' https:",
                   "img-src 'self' data: https:",
-                  "font-src 'self' data: https://fonts.gstatic.com",
+                  "font-src 'self' data: https:",
                   "connect-src 'self' https://api.coingecko.com https://api.changenow.io https://api.btcswapxmr.com https://xmr-node.cakewallet.com:18081 https://stagenet.xmr-tw.org:38081",
                   "frame-ancestors 'none'",
                 ].join('; ')
               : [
                   "default-src 'self'",
                   "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-                  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                  "style-src 'self' 'unsafe-inline' https:",
                   "img-src 'self' data: https:",
-                  "font-src 'self' data: https://fonts.gstatic.com",
+                  "font-src 'self' data: https:",
                   "connect-src 'self' https://api.coingecko.com https://api.changenow.io https://api.btcswapxmr.com https://xmr-node.cakewallet.com:18081 https://stagenet.xmr-tw.org:38081",
                   "frame-ancestors 'none'",
                   "upgrade-insecure-requests",
