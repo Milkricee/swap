@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import type { SwapRoute } from '@/types/wallet';
 import type { PaymentStatus } from '@/lib/payment';
 import { ArrowDownUp, TrendingUp, Clock, Zap, Copy, Check, QrCode, Send, X, Loader2, CheckCircle2, XCircle, Wallet } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
 import { toast } from 'sonner';
 import { saveSwapOrder } from '@/lib/storage/encrypted';
 import { useDebounce } from '@/lib/utils/hooks';
@@ -35,7 +34,7 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
   const [status, setStatus] = useState<PaymentStatus | null>(null);
   const [estimate, setEstimate] = useState<any>(null);
   const [scannerActive, setScannerActive] = useState(false);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<any>(null);
   const qrReaderRef = useRef<HTMLDivElement>(null);
 
   // Prefetch prices API for instant quotes
@@ -101,7 +100,7 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
   const [showXMRAddressModal, setShowXMRAddressModal] = useState(false);
   const [manualXMRAddress, setManualXMRAddress] = useState('');
   const [xmrAddressScannerActive, setXMRAddressScannerActive] = useState(false);
-  const xmrScannerRef = useRef<Html5Qrcode | null>(null);
+  const xmrScannerRef = useRef<any>(null);
 
   async function handleExecuteSwap() {
     if (!route) return;
@@ -251,6 +250,8 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
     }
     setXMRAddressScannerActive(true);
     try {
+      // Lazy load html5-qrcode only when QR scanner opens
+      const { Html5Qrcode } = await import('html5-qrcode');
       const qrScanner = new Html5Qrcode('xmr-qr-reader');
       xmrScannerRef.current = qrScanner;
       await qrScanner.start(
@@ -291,6 +292,8 @@ export default function SwapCard({ onToCoinChange }: SwapCardProps) {
     if (scannerActive) { await stopScanner(); return; }
     setScannerActive(true);
     try {
+      // Lazy load html5-qrcode only when QR scanner opens
+      const { Html5Qrcode } = await import('html5-qrcode');
       const qrScanner = new Html5Qrcode('qr-reader');
       scannerRef.current = qrScanner;
       await qrScanner.start(

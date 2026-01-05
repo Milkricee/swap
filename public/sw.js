@@ -38,7 +38,29 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip API requests (always fetch fresh)
+  const url = new URL(event.request.url);
+
+  // Stale-While-Revalidate for API requests (prices, wallets)
+  if (url.pathname.startsWith('/api/prices') || url.pathname.startsWith('/api/wallets')) {
+    event.respondWith(
+      caches.open('api-cache-v1').then(async (cache) => {
+        const cached = await cache.match(event.request);
+        const fetchPromise = fetch(event.request).then((response) => {
+          if (response.ok) {
+            cache.put(event.request, response.clone());
+          }
+          return response;
+        }).catch(() => cached || new Response(
+          JSON.stringify({ error: 'Offline' }),
+          { headers: { 'Content-Type': 'application/json' }, status: 503 }
+        ));
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Skip other API requests (always fetch fresh)
   if (event.request.url.includes('/api/')) return;
 
   event.respondWith(
