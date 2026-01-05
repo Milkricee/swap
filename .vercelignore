@@ -6,10 +6,13 @@
 node_modules
 .next
 
-# Documentation
+# VPS server (separate deployment)
+vps-server/
+
+# Documentation (most internal docs)
 docs/
-*.md
-!README.md
+!docs/TESTING-GUIDE.md
+!docs/PRODUCTION-READINESS.md
 
 # Test files
 *.test.ts

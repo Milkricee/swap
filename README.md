@@ -228,7 +228,9 @@ HTTPS required in production. Use `localhost` for development.
 
 MIT License - See [LICENSE](LICENSE) for details.
 
-## 🙏 Credits
+**⚠️ Security Notice**: This is a portfolio/development project. See [SECURITY.md](SECURITY.md) for security considerations before production use.
+
+## 🙏 Acknowledgments
 
 - [Monero Project](https://www.getmonero.org/)
 - [btcswapxmr.com](https://btcswapxmr.com/) (0.15% fee)

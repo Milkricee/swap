@@ -1,8 +1,8 @@
-# Vercel Deployment Guide (Private Testing)
+# Vercel Deployment Guide
 
 ## 🚀 Quick Deploy
 
-### 1. Push zu GitHub
+### 1. Push to GitHub
 ```bash
 git add .
 git commit -m "Ready for Vercel deployment"
@@ -10,21 +10,23 @@ git push origin main
 ```
 
 ### 2. Vercel Setup
-1. Gehe zu [vercel.com](https://vercel.com)
-2. **Sign up mit GitHub** (kostenlos)
-3. **Import Project** → Wähle `Milkricee/swap` Repository
+1. Go to [vercel.com](https://vercel.com)
+2. **Sign up with GitHub** (free tier)
+3. **Import Project** → Select `Milkricee/swap` Repository
 4. **Framework Preset**: Next.js (auto-detected)
 
-### 3. Environment Variables setzen
+### 3. Environment Variables Setup
 
-**WICHTIG:** Im Vercel Dashboard → Settings → Environment Variables:
+**IMPORTANT:** In Vercel Dashboard → Settings → Environment Variables:
 
 ```env
-CHANGENOW_API_KEY=ad422020d4bf86bc0fbcc18ef1d927428472deab8abb2055f8e268aede9fbe5e
+CHANGENOW_API_KEY=your_api_key_from_changenow_io
 NEXT_PUBLIC_MONERO_RPC_URL=https://xmr-node.cakewallet.com:18081
 NEXT_PUBLIC_MONERO_NETWORK=mainnet
-NEXT_PUBLIC_ENCRYPTION_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
+
+**Get API Keys:**
+- ChangeNOW: Register at https://changenow.io/signup → API Settings
 
 **Für alle Environments:** Production, Preview, Development (alle 3 anhaken!)
 
